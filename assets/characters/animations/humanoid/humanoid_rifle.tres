@@ -1,9 +1,9 @@
 [gd_resource type="AnimationLibrary" load_steps=6 format=3 uid="uid://bws6jp3cl8x7j"]
 
-[ext_resource type="Animation" uid="uid://rwvgbs2g6px" path="res://assets/characters/animations/humanoid/clips/rifle_idle.res" id="1_y8nsn"]
-[ext_resource type="Animation" uid="uid://cj1jxdsb7xqun" path="res://assets/characters/animations/humanoid/clips/rifle_walk_forward.res" id="2_qw31l"]
-[ext_resource type="Animation" uid="uid://bpw46mc0a3llc" path="res://assets/characters/animations/humanoid/clips/rifle_walk_left.res" id="3_mk5sv"]
-[ext_resource type="Animation" uid="uid://5h66gcjpl1bp" path="res://assets/characters/animations/humanoid/clips/rifle_walk_right.res" id="4_1ejqx"]
+[ext_resource type="Animation" uid="uid://dcae6wmtvvgq1" path="res://assets/characters/animations/humanoid/clips/rifle_idle.res" id="1_y8nsn"]
+[ext_resource type="Animation" uid="uid://c72140gxkrat6" path="res://assets/characters/animations/humanoid/clips/rifle_walk_forward.res" id="2_qw31l"]
+[ext_resource type="Animation" uid="uid://d8g7tcyt0sba" path="res://assets/characters/animations/humanoid/clips/rifle_walk_left.res" id="3_mk5sv"]
+[ext_resource type="Animation" uid="uid://dn8vdikwvg2v7" path="res://assets/characters/animations/humanoid/clips/rifle_walk_right.res" id="4_1ejqx"]
 [ext_resource type="Animation" uid="uid://drimm2tvti36d" path="res://assets/characters/animations/humanoid/clips/rifle_walk_backward.res" id="5_mk5sv"]
 
 [resource]
