@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://cb4bf6l0ex7ts"
-path="res://.godot/imported/rifle_idle.blend-f29738dbc8416f42c35387e7bbcae597.scn"
+uid="uid://c3g74jnx1lna7"
+path="res://.godot/imported/rifle_idle.blend-7eda5f89915527bd48a6f774f1743bce.scn"
 
 [deps]
 
-source_file="res://assets/characters/animations/humanoid/mixamo/blender/rifle_idle.blend"
-dest_files=["res://.godot/imported/rifle_idle.blend-f29738dbc8416f42c35387e7bbcae597.scn"]
+source_file="res://assets/characters/animations/humanoid/blender/rifle_idle.blend"
+dest_files=["res://.godot/imported/rifle_idle.blend-7eda5f89915527bd48a6f774f1743bce.scn"]
 
 [params]
 

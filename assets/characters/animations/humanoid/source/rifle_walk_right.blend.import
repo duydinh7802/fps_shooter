@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://d0jiv8gdh5680"
-path="res://.godot/imported/rifle_idle.glb-ae2c616a272c9812ff6570566dc0f1ed.scn"
+uid="uid://r81la4dqj8ea"
+path="res://.godot/imported/rifle_walk_right.blend-49cbf77659c0d72498f1fc02c54a696a.scn"
 
 [deps]
 
-source_file="res://assets/characters/animations/humanoid/mixamo/source/rifle_idle.glb"
-dest_files=["res://.godot/imported/rifle_idle.glb-ae2c616a272c9812ff6570566dc0f1ed.scn"]
+source_file="res://assets/characters/animations/humanoid/source/rifle_walk_right.blend"
+dest_files=["res://.godot/imported/rifle_walk_right.blend-49cbf77659c0d72498f1fc02c54a696a.scn"]
 
 [params]
 
@@ -39,11 +39,11 @@ materials/extract_format=0
 materials/extract_path=""
 _subresources={
 "animations": {
-"Animation": {
+"mixamo_com": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/characters/animations/humanoid/mixamo/clips/rifle_idle.res",
+"save_to_file/fallback_path": "res://assets/characters/animations/humanoid/clips/rifle_walk_right.res",
 "save_to_file/keep_custom_tracks": "",
-"save_to_file/path": "uid://bqx6pptadkrv0",
+"save_to_file/path": "uid://dn8vdikwvg2v7",
 "settings/loop_mode": 1,
 "slice_1/end_frame": 0,
 "slice_1/loop_mode": 0,
@@ -2098,10 +2098,26 @@ _subresources={
 },
 "nodes": {
 "PATH:Armature/Skeleton3D": {
-"retarget/bone_map": Resource("uid://dt2kd6ytnoqqe", "res://assets/characters/skeletons/humanoid/mixamo_bone_map.tres"),
-"retarget/remove_tracks/unmapped_bones": 1
+"retarget/bone_map": Resource("uid://32u3g7ijbsom", "res://assets/characters/skeletons/humanoid/humanoid_bone_map.tres")
 }
 }
 }
+blender/nodes/visible=0
+blender/nodes/active_collection_only=false
+blender/nodes/punctual_lights=true
+blender/nodes/cameras=true
+blender/nodes/custom_properties=true
+blender/nodes/modifiers=1
+blender/meshes/colors=false
+blender/meshes/uvs=true
+blender/meshes/normals=true
+blender/meshes/export_geometry_nodes_instances=false
+blender/meshes/tangents=true
+blender/meshes/skins=2
+blender/meshes/export_bones_deforming_mesh_only=false
+blender/materials/unpack_enabled=true
+blender/materials/export_materials=1
+blender/animation/limit_playback=true
+blender/animation/always_sample=true
+blender/animation/group_tracks=true
 gltf/naming_version=2
-gltf/embedded_image_handling=1

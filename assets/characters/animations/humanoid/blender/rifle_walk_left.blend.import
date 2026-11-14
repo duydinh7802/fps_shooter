@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://e4jlbvgj1l1r"
-path="res://.godot/imported/rifle_walk_forward.blend-551016d133dd532b81b51ab86dda1e20.scn"
+uid="uid://c4fx57e63iu6t"
+path="res://.godot/imported/rifle_walk_left.blend-fc2013c923f328741c0bc90615dcd283.scn"
 
 [deps]
 
-source_file="res://assets/characters/animations/humanoid/mixamo/blender/rifle_walk_forward.blend"
-dest_files=["res://.godot/imported/rifle_walk_forward.blend-551016d133dd532b81b51ab86dda1e20.scn"]
+source_file="res://assets/characters/animations/humanoid/blender/rifle_walk_left.blend"
+dest_files=["res://.godot/imported/rifle_walk_left.blend-fc2013c923f328741c0bc90615dcd283.scn"]
 
 [params]
 
