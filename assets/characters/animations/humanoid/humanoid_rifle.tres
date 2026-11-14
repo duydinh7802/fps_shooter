@@ -1,0 +1,8 @@
+[gd_resource type="AnimationLibrary" load_steps=2 format=3 uid="uid://bws6jp3cl8x7j"]
+
+[ext_resource type="Animation" uid="uid://c3g8wso6tyfh0" path="res://assets/characters/animations/humanoid/mixamo/clips/rifle_idle.res" id="1_y8nsn"]
+
+[resource]
+_data = {
+&"rifle_idle": ExtResource("1_y8nsn")
+}
