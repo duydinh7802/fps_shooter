@@ -1,0 +1,20 @@
+[gd_scene load_steps=4 format=3 uid="uid://dmyq47vaxitgy"]
+
+[ext_resource type="Script" uid="uid://tcbklgquvi5u" path="res://scripts/player/player_controller.gd" id="1_8afob"]
+[ext_resource type="PackedScene" uid="uid://b74s6ucl1yvmc" path="res://scenes/characters/swat/swat_character.tscn" id="2_gmlin"]
+[ext_resource type="Script" uid="uid://dq0px2cyrfiqb" path="res://scripts/camera/top_down_camera.gd" id="3_lvxji"]
+
+[node name="Player" type="Node3D" node_paths=PackedStringArray("character", "camera")]
+script = ExtResource("1_8afob")
+character = NodePath("SwatCharacter")
+camera = NodePath("CameraRig/Camera3D")
+
+[node name="SwatCharacter" parent="." instance=ExtResource("2_gmlin")]
+
+[node name="CameraRig" type="Node3D" parent="." node_paths=PackedStringArray("target")]
+script = ExtResource("3_lvxji")
+target = NodePath("../SwatCharacter")
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig"]
+transform = Transform3D(1, 0, 0, 0, 0.5591929, 0.82903755, 0, -0.82903755, 0.5591929, 0, 7, 6)
+fov = 50.0

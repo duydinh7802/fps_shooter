@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://b74s6ucl1yvmc"]
+[gd_scene load_steps=22 format=3 uid="uid://b74s6ucl1yvmc"]
 
 [ext_resource type="Script" uid="uid://dteu2j5j672qn" path="res://scripts/characters/humanoid_character.gd" id="1_cgn6f"]
 [ext_resource type="PackedScene" uid="uid://cgcipwp6uwnjk" path="res://scenes/characters/swat/swat_model.tscn" id="1_rl4ey"]
@@ -6,9 +6,6 @@
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_ow5n7"]
 radius = 0.3
 height = 1.75
-
-[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_rl4ey"]
-animation = &"humanoid_rifle/rifle_idle"
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_cgn6f"]
 animation = &"humanoid_rifle/rifle_walk_right"
@@ -22,29 +19,85 @@ animation = &"humanoid_rifle/rifle_walk_backward"
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_3wamu"]
 animation = &"humanoid_rifle/rifle_walk_forward"
 
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_86jxv"]
+animation = &"humanoid_rifle/rifle_walk_forward_right"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_qtpdt"]
+animation = &"humanoid_rifle/rifle_walk_forward_left"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_fj0r2"]
+animation = &"humanoid_rifle/rifle_walk_backward_left"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_u5g5n"]
+animation = &"humanoid_rifle/rifle_walk_backward_right"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_6amnu"]
+animation = &"humanoid_rifle/rifle_idle"
+
 [sub_resource type="AnimationNodeBlendSpace2D" id="AnimationNodeBlendSpace2D_rl4ey"]
-blend_point_0/node = SubResource("AnimationNodeAnimation_rl4ey")
-blend_point_0/pos = Vector2(0, 0)
-blend_point_1/node = SubResource("AnimationNodeAnimation_cgn6f")
-blend_point_1/pos = Vector2(1, 0)
-blend_point_2/node = SubResource("AnimationNodeAnimation_mlsfa")
-blend_point_2/pos = Vector2(-1, 0)
-blend_point_3/node = SubResource("AnimationNodeAnimation_sxga5")
-blend_point_3/pos = Vector2(0, -1)
-blend_point_4/node = SubResource("AnimationNodeAnimation_3wamu")
-blend_point_4/pos = Vector2(0, 1)
+blend_point_0/node = SubResource("AnimationNodeAnimation_cgn6f")
+blend_point_0/pos = Vector2(1, 0)
+blend_point_1/node = SubResource("AnimationNodeAnimation_mlsfa")
+blend_point_1/pos = Vector2(-1, 0)
+blend_point_2/node = SubResource("AnimationNodeAnimation_sxga5")
+blend_point_2/pos = Vector2(0, -1)
+blend_point_3/node = SubResource("AnimationNodeAnimation_3wamu")
+blend_point_3/pos = Vector2(0, 1)
+blend_point_4/node = SubResource("AnimationNodeAnimation_86jxv")
+blend_point_4/pos = Vector2(0.71, 0.71)
+blend_point_5/node = SubResource("AnimationNodeAnimation_qtpdt")
+blend_point_5/pos = Vector2(-0.71, 0.71)
+blend_point_6/node = SubResource("AnimationNodeAnimation_fj0r2")
+blend_point_6/pos = Vector2(-0.71, -0.71)
+blend_point_7/node = SubResource("AnimationNodeAnimation_u5g5n")
+blend_point_7/pos = Vector2(0.71, -0.71)
+blend_point_8/node = SubResource("AnimationNodeAnimation_6amnu")
+blend_point_8/pos = Vector2(0, 0)
+snap = Vector2(0.1, 0.17)
 x_label = "right"
 y_label = "forward"
 sync = true
 
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_rl4ey"]
+animation = &"humanoid_rifle/rifle_turn_left"
+use_custom_timeline = true
+timeline_length = 0.51
+stretch_time_scale = true
+start_offset = 0.0
+loop_mode = 1
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_l1no8"]
+animation = &"humanoid_rifle/rifle_turn_right"
+use_custom_timeline = true
+timeline_length = 0.57
+stretch_time_scale = true
+start_offset = 0.0
+loop_mode = 1
+
 [sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_cgn6f"]
 advance_mode = 2
 
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_6amnu"]
+xfade_time = 0.15
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_p5go4"]
+xfade_time = 0.15
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_p7qs8"]
+xfade_time = 0.15
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_x7p40"]
+xfade_time = 0.15
+
 [sub_resource type="AnimationNodeStateMachine" id="AnimationNodeStateMachine_rl4ey"]
 states/Locomotion/node = SubResource("AnimationNodeBlendSpace2D_rl4ey")
-states/Locomotion/position = Vector2(-127, 145)
-states/Start/position = Vector2(-332, 132)
-transitions = ["Start", "Locomotion", SubResource("AnimationNodeStateMachineTransition_cgn6f")]
+states/Locomotion/position = Vector2(-132, 231)
+states/Start/position = Vector2(-313, 231)
+states/TurnLeft/node = SubResource("AnimationNodeAnimation_rl4ey")
+states/TurnLeft/position = Vector2(-132, 130)
+states/TurnRight/node = SubResource("AnimationNodeAnimation_l1no8")
+states/TurnRight/position = Vector2(-132, 327)
+transitions = ["Start", "Locomotion", SubResource("AnimationNodeStateMachineTransition_cgn6f"), "Locomotion", "TurnLeft", SubResource("AnimationNodeStateMachineTransition_6amnu"), "Locomotion", "TurnRight", SubResource("AnimationNodeStateMachineTransition_p5go4"), "TurnLeft", "Locomotion", SubResource("AnimationNodeStateMachineTransition_p7qs8"), "TurnRight", "Locomotion", SubResource("AnimationNodeStateMachineTransition_x7p40")]
 graph_offset = Vector2(-583, 0)
 
 [node name="SwatCharacter" type="CharacterBody3D"]
@@ -62,4 +115,4 @@ root_node = NodePath("../Model")
 callback_mode_process = 0
 tree_root = SubResource("AnimationNodeStateMachine_rl4ey")
 anim_player = NodePath("../Model/AnimationPlayer")
-parameters/Locomotion/blend_position = Vector2(-0.9974874, -0.004484296)
+parameters/Locomotion/blend_position = Vector2(-0.5, 0.5051546)

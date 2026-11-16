@@ -8,4 +8,5 @@ extends Node3D
 func _physics_process(_delta: float) -> void:
 	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
 	character.move_input = Vector3(input.x, 0.0, input.y)
-	character.look_direction = Vector3.RIGHT if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) else Vector3.FORWARD
+	character.aim_direction = Vector3.RIGHT if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) else Vector3.FORWARD
+
