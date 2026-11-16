@@ -58,6 +58,8 @@ Mixamo animation ──► Bước 6: Blender (bỏ prefix, In Place) ───�
                                     Bước 7: clip .res ──► AnimationLibrary ──► swat_model.tscn
                                                                                      │
                             Bước 8–10: swat_character.tscn (AnimationTree + script) ◄┘
+                                                                                     │
+                Bước 11–15: player.tscn (ngắm chuột, camera, xoay thân trên, xoay tại chỗ) ◄┘
 ```
 
 **Nguyên tắc cốt lõi:** mọi nhân vật và mọi animation đều dùng **cùng một bộ xương** (tên bone giống hệt `skeleton_reference`). Godot đổi tên tất cả về tên chuẩn của `SkeletonProfileHumanoid` qua **một file BoneMap duy nhất**: `humanoid_bone_map.tres`.
@@ -67,7 +69,7 @@ Mixamo animation ──► Bước 6: Blender (bỏ prefix, In Place) ───�
 ```
 assets/characters/
 ├── skeletons/humanoid/
-│   ├── blender/skeleton_reference.blend      ← bộ xương gốc (không mesh, không animation)
+│   ├── source/skeleton_reference.blend       ← bộ xương gốc (không mesh, không animation)
 │   └── humanoid_bone_map.tres                ← BoneMap duy nhất của project
 ├── models/swat/
 │   ├── blender/swat.blend                    ← mesh + rig, chỉ có material slot (không có ảnh)
@@ -76,16 +78,25 @@ assets/characters/
 └── animations/humanoid/
     ├── source/*.blend                        ← animation đã chuẩn hoá, Godot import trực tiếp
     ├── clips/*.res                           ← clip Godot tách ra khi import
-    └── humanoid_rifle.tres                   ← AnimationLibrary
+    └── humanoid_rifle.tres                   ← AnimationLibrary (idle, walk 8 hướng, turn trái/phải)
 scenes/
 ├── characters/swat/
 │   ├── swat_model.tscn                       ← model SWAT + AnimationPlayer (kho animation)
 │   └── swat_character.tscn                   ← nhân vật hoàn chỉnh: thân, collision, AnimationTree
-└── tests/test_character.tscn                 ← scene test di chuyển
+├── player/player.tscn                        ← người chơi: SwatCharacter + controller + camera
+└── tests/
+    ├── test_character.tscn                   ← test di chuyển (Giai đoạn 2)
+    └── test_player.tscn                      ← test người chơi: ngắm chuột, camera
 scripts/
-├── characters/humanoid_character.gd          ← di chuyển, xoay, cập nhật BlendSpace (dùng chung player/AI)
-└── tests/test_character_driver.gd            ← đọc WASD cho scene test
-tools/blender/make_in_place.py                ← xoá chuyển động trôi của animation đi
+├── characters/
+│   ├── humanoid_character.gd                 ← di chuyển, luật xoay, AnimationTree (dùng chung player/AI)
+│   └── spine_twist_modifier.gd               ← xoay thân trên theo hướng ngắm
+├── player/player_controller.gd               ← đọc WASD + chuột, ra lệnh cho nhân vật
+├── camera/top_down_camera.gd                 ← camera bám theo nhân vật
+└── tests/test_character_driver.gd            ← đọc WASD cho scene test cũ
+tools/blender/
+├── make_in_place.py                          ← xoá chuyển động trôi của animation
+└── make_turn_in_place.py                     ← xoá phần xoay hông của animation xoay tại chỗ
 ```
 
 ## Quy ước đặt tên
@@ -151,7 +162,7 @@ Kết quả: trục **Y nằm dọc theo bone** ở mọi bone. Nhờ vậy sau 
 2. Kết quả: `Hips`, `Spine`, `LeftArm`… Không được còn dấu `:`, vì Godot dùng `:` trong NodePath của track animation.
 
 ### 1.6 Lưu
-Lưu thành `assets/characters/skeletons/humanoid/blender/skeleton_reference.blend`.
+Lưu thành `assets/characters/skeletons/humanoid/source/skeleton_reference.blend`.
 
 **Checklist:**
 - 1 object duy nhất là `Skeleton_Reference`
@@ -325,7 +336,7 @@ Script `tools/blender/make_in_place.py` đo độ trôi ngang của Hips từ fr
 **Cách 2: chạy hàng loạt bằng PowerShell** (tại thư mục project)
 ```powershell
 $blender = "C:\Program Files\Blender Foundation\Blender 5.3\blender.exe"
-foreach ($n in "forward","backward","left","right") {
+foreach ($n in "forward","backward","left","right", "forward_left","backward_left","forward_right","backward_right") {
   & $blender -b "assets\characters\animations\humanoid\source\rifle_walk_$n.blend" `
     --python "tools\blender\make_in_place.py" --python-expr "import bpy; bpy.ops.wm.save_mainfile()"
 }
@@ -333,8 +344,33 @@ foreach ($n in "forward","backward","left","right") {
 
 Lưu ý:
 - Chạy lại lần 2 trên cùng file cũng vô hại, vì lúc đó độ trôi đã bằng 0.
-- **Không** chạy cho animation xoay tại chỗ (turn) nếu định dùng root motion.
+- Script **tự chuyển về Object Mode** trước khi chạy. Nếu file được lưu lúc armature đang ở Edit Mode, Blender không tính tư thế animation và mọi phép đo ra 0.
 - Độ trôi đo được cho biết tốc độ thật của animation: khoảng **1.8 m/s** với các clip walk hiện có. Dùng con số này cho `walk_speed`.
+- ⚠️ Trong Blender, luôn **Tab về Object Mode trước khi Ctrl+S**.
+
+### 6.4b Animation xoay tại chỗ (Rifle Turn Left / Right)
+Clip Mixamo gốc vừa **bước chân** vừa **xoay hông** khoảng 80°. Trong game, code tự xoay thân nhân vật (Bước 15). Nếu giữ phần xoay trong clip, nhân vật sẽ xoay gấp đôi. Vì vậy cần **xoá phần xoay hông, giữ bước chân**.
+
+Script `tools/blender/make_turn_in_place.py`:
+1. Đo hướng hông ở từng frame bằng đường nối 2 đùi.
+2. Xoay ngược Hips quanh trục đứng đi qua chính nó, đúng bằng góc đã xoay so với frame đầu.
+3. Ghi lại keyframe xoay của Hips.
+
+Chạy **lần lượt 2 script** cho mỗi file turn. Thứ tự quan trọng: xoá xoay trước, xoá trôi sau.
+```powershell
+$blender = "C:\Program Files\Blender Foundation\Blender 5.3\blender.exe"
+foreach ($n in "left","right") {
+  $f = "assets\characters\animations\humanoid\source\rifle_turn_$n.blend"
+  & $blender -b $f --python "tools\blender\make_turn_in_place.py" --python-expr "import bpy; bpy.ops.wm.save_mainfile()"
+  & $blender -b $f --python "tools\blender\make_in_place.py"      --python-expr "import bpy; bpy.ops.wm.save_mainfile()"
+}
+```
+Kết quả in ra console, **ghi lại góc xoay** để dùng ở Bước 15:
+```
+[Turn In Place] ... hips turned +76.6 deg -> now max 0.00 deg     ← rifle_turn_left:  77°, 1.30 s
+[Turn In Place] ... hips turned -84.7 deg -> now max 0.00 deg     ← rifle_turn_right: 85°, 1.47 s
+```
+Loop Mode của 2 clip turn để **Linear**. Khi cần xoay quá 90°, clip lặp lại để chân bước tiếp.
 
 ### 6.5 Lưu file nguồn
 Lưu file `.blend` vào `assets/characters/animations/humanoid/source/<tên>.blend`. Godot **import trực tiếp** file này.
@@ -354,6 +390,7 @@ Lưu file `.blend` vào `assets/characters/animations/humanoid/source/<tên>.ble
    - **Save to File:** ☑ → `animations/humanoid/clips/<tên>.res`
    - **Keep Custom Tracks:** ☐
 4. **Reimport.** Khi file `.blend` thay đổi (ví dụ sau khi chạy script In Place), Godot tự import lại và clip `.res` tự cập nhật, không phải sửa library.
+5. Nếu sau khi import lại thấy cảnh báo `ext_resource, invalid UID … using text path instead`: clip được tạo lại với UID mới nhưng library vẫn ghi UID cũ. Godot vẫn load đúng theo đường dẫn. Để hết cảnh báo, mở **Manage Animations** và bấm **💾** ở dòng library, hoặc chạy **Project → Tools → Upgrade Project Files…**.
 
 ### 7.2 AnimationLibrary
 1. Tạo **một lần**: chuột phải `animations/humanoid/` → **Create New → Resource → AnimationLibrary** → `humanoid_rifle.tres`.
@@ -372,7 +409,7 @@ Lưu file `.blend` vào `assets/characters/animations/humanoid/source/<tên>.ble
 
 ### 7.4 Thêm animation mới (quy trình rút gọn)
 1. Tải từ Mixamo (6.1).
-2. Blender: import, bỏ prefix (6.2–6.3). Nếu là animation đi mà không có In Place thì chạy `make_in_place.py` (6.4). Lưu vào `source/` (6.5).
+2. Blender: import, bỏ prefix (6.2–6.3). Animation đi không có In Place thì chạy `make_in_place.py` (6.4). Animation xoay tại chỗ thì chạy `make_turn_in_place.py` rồi `make_in_place.py` (6.4b). Lưu vào `source/` ở **Object Mode** (6.5).
 3. Godot: Quick Load BoneMap, bật Unmapped Bones, đặt Loop, Save to File (7.1).
 4. Thêm clip vào `humanoid_rifle.tres` và nhớ bấm 💾 (7.3).
 5. Nếu là kiểu di chuyển mới, thêm điểm vào BlendSpace2D (8.6).
@@ -393,8 +430,12 @@ SwatCharacter (CharacterBody3D)        ← script: humanoid_character.gd
  │   └ AnimationPlayer                 ← kho animation, KHÔNG autoplay
  └ AnimationTree
      └ StateMachine
-         └ Locomotion (BlendSpace2D)
+         ├ Locomotion (BlendSpace2D, 9 điểm)
+         ├ TurnLeft   (thêm ở Bước 15)
+         └ TurnRight  (thêm ở Bước 15)
 ```
+
+⚠️ Script của `SwatCharacter` phải là **file** `scripts/characters/humanoid_character.gd`, **không phải script nhúng (built-in)**. Khi bấm Attach Script, bỏ tích **Built-in Script**. Kiểm tra: ô Script trong Inspector phải hiện `humanoid_character.gd`, không phải `swat_character.tscn::GDScript_…`.
 
 ### 8.1 Tạo scene
 1. **Scene → New Scene → Other Node → `CharacterBody3D`**, đổi tên thành `SwatCharacter`.
@@ -442,8 +483,15 @@ Chọn `AnimationTree`, panel **AnimationTree** mở ở dưới.
    | `(0, -1)` | `humanoid_rifle/rifle_walk_backward` |
    | `(-1, 0)` | `humanoid_rifle/rifle_walk_left` |
    | `(1, 0)` | `humanoid_rifle/rifle_walk_right` |
+   | `(0.71, 0.71)` | `humanoid_rifle/rifle_walk_forward_right` |
+   | `(-0.71, 0.71)` | `humanoid_rifle/rifle_walk_forward_left` |
+   | `(-0.71, -0.71)` | `humanoid_rifle/rifle_walk_backward_left` |
+   | `(0.71, -0.71)` | `humanoid_rifle/rifle_walk_backward_right` |
 
    Quy ước: **X dương là sang phải** của nhân vật, **Y dương là phía trước**.
+   - **Chỉ 1 điểm idle** ở `(0, 0)`. Nhiều điểm trùng vị trí làm Godot chia tam giác trộn bị lỗi.
+   - Điểm chéo đặt ở **(±0.71, ±0.71)**, tức là nằm trên **vòng tròn bán kính 1**, không phải (±0.5, ±0.5). Khi đi chéo hết tốc độ, script đưa vào blend là `(0.71, 0.71)`, nên điểm chéo phải nằm đúng ở đó mới phát đúng clip chéo.
+   - Nếu ô nhập tự làm tròn, tạm đặt Snap về `0.01` rồi gõ lại.
 3. Thiết lập **Sync**, X/Y Label, Snap, Blend Mode **không nằm trên thanh dưới** của trình chỉnh. Muốn chỉnh: ở panel state machine, **click một lần** vào node `Locomotion` (không bấm ✏️), rồi chỉnh trong Inspector:
    - **Sync** ☑ (giữ nhịp chân giữa các clip walk khi trộn)
    - **X Label** `right`, **Y Label** `forward`
@@ -467,11 +515,11 @@ Chọn `AnimationTree`, panel **AnimationTree** mở ở dưới.
 | Biến | Ý nghĩa |
 |---|---|
 | `move_input: Vector3` | Hướng muốn đi, toạ độ thế giới, độ dài 0..1 |
-| `look_direction: Vector3` | Hướng muốn nhìn, toạ độ thế giới |
+| `aim_direction: Vector3` | Hướng muốn ngắm, toạ độ thế giới (trước Bước 12 tên là `look_direction`) |
 
-Thông số chỉnh trong Inspector: `walk_speed` (1.8, khớp tốc độ animation), `acceleration` (12), `turn_speed` (12), `blend_smoothing` (10).
+Thông số nhóm **Movement** trong Inspector: `walk_speed` (1.8, khớp tốc độ animation), `acceleration` (12), `blend_smoothing` (10). Các thông số xoay ở nhóm **Turning**, xem Bước 12–15.
 
-Mỗi frame vật lý (`_physics_process`), script làm 3 việc theo thứ tự:
+Bước này mô tả phiên bản đầu tiên (thân luôn xoay theo hướng nhìn). Từ Bước 12, phần xoay được viết lại thành `_update_facing` với luật ngưỡng.
 
 ### 9.1 `_apply_movement`: di chuyển
 1. `limit_length(1.0)`: giới hạn độ dài input, để đi chéo (W+D) không nhanh hơn 41%.
@@ -479,8 +527,8 @@ Mỗi frame vật lý (`_physics_process`), script làm 3 việc theo thứ tự
 3. Trọng lực: trên sàn thì `velocity.y = 0`, trên không thì cộng `get_gravity() * delta`.
 4. `move_and_slide()`: di chuyển, trượt dọc tường, cập nhật `is_on_floor()`.
 
-### 9.2 `_apply_facing`: xoay người
-1. Bỏ trục Y của `look_direction`, vì chỉ xoay ngang.
+### 9.2 Xoay người (phiên bản đầu, đã thay ở Bước 12)
+1. Bỏ trục Y của hướng nhìn, vì chỉ xoay ngang.
 2. `atan2(-dir.x, -dir.z)`: đổi hướng thành góc yaw. Có dấu trừ vì mặt nhân vật là −Z.
 
    | Hướng nhìn | yaw |
@@ -518,7 +566,7 @@ Root `Node3D` tên `TestCharacter`, gắn script `scripts/tests/test_character_d
 - Position y = −0.1 để mặt trên của hộp dày 0.2 nằm đúng ở y = 0.
 
 ### 10.2 Driver test
-`test_character_driver.gd` đọc WASD bằng `Input.get_vector("move_left", "move_right", "move_forward", "move_backward")` rồi gán cho `move_input`. Hướng nhìn: mặc định nhìn lên, **giữ chuột phải** thì nhìn sang phải. Bản test chỉ có 2 hướng nhìn; ngắm theo chuột sẽ làm ở giai đoạn sau.
+`test_character_driver.gd` đọc WASD bằng `Input.get_vector("move_left", "move_right", "move_forward", "move_backward")` rồi gán cho `move_input`. Hướng ngắm (`aim_direction`): mặc định nhìn lên, **giữ chuột phải** thì nhìn sang phải. Bản test chỉ có 2 hướng nhìn; ngắm theo chuột thật làm ở Bước 11.
 
 ### 10.3 Input Map
 **Project → Project Settings → Input Map:** `move_forward` (W), `move_backward` (S), `move_left` (A), `move_right` (D), `shoot` (chuột trái). Mỗi phím chọn **Device: All Devices**.
@@ -532,6 +580,209 @@ Root `Node3D` tên `TestCharacter`, gắn script `scripts/tests/test_character_d
 | W + D | Đi chéo, vẫn 1.8 m/s, trộn forward + right |
 | Giữ chuột phải + W | Nhân vật nhìn sang phải, đi lên, phát **walk_left** |
 | Thả phím | Giảm tốc mượt rồi về idle |
+
+---
+
+# Phần IV: Điều khiển người chơi
+
+**Mục tiêu:** nhân vật ngắm theo con trỏ chuột. Góc nhỏ thì **chỉ thân trên vặn**, góc lớn thì **chân bước xoay** theo.
+
+```
+aim_yaw  = góc tới con trỏ chuột          → thân trên (SpineTwistModifier)
+body_yaw = rotation.y của SwatCharacter    → hông và chân
+twist    = angle_difference(body_yaw, aim_yaw), giới hạn ±max_twist_angle
+```
+
+| Trạng thái | Độ lệch giữa ngắm và thân | Chân | Thân trên |
+|---|---|---|---|
+| Đứng yên | ≤ 60° | đứng im | vặn đúng bằng `twist` |
+| Đứng yên | > 60° liên tục 0.1 s | **xoay đều 150°/s** + phát `TurnLeft`/`TurnRight` cho tới khi còn lệch < 5° | vặn phần còn thiếu |
+| Đang đi | bất kỳ | luôn bám theo hướng ngắm, BlendSpace chọn kiểu đi | vặn phần còn thiếu |
+
+## Bước 11: Ngắm theo chuột và camera
+
+### 11.1 Cấu trúc
+```
+scenes/player/player.tscn
+Player (Node3D)              ← script: player_controller.gd
+ ├ SwatCharacter             ← instance swat_character.tscn
+ └ CameraRig (Node3D)        ← script: top_down_camera.gd
+     └ Camera3D              ← Position (0, 9, 6), Rotation (-56, 0, 0), FOV 50
+```
+Camera **không** làm con của `SwatCharacter`. Nhân vật xoay theo chuột, nếu camera là con thì camera sẽ quay theo. `CameraRig` chỉ đi theo **vị trí**.
+
+### 11.2 `scripts/camera/top_down_camera.gd`
+- `@export var target: Node3D` (gán `SwatCharacter`), `follow_speed` (8).
+- `_ready()`: đặt camera ngay vị trí target, để không trượt từ gốc toạ độ tới.
+- `_process(delta)`: `global_position.lerp(target.global_position, 1.0 - exp(-follow_speed * delta))`.
+  - Camera thuộc phần hiển thị nên đặt trong `_process` (chạy theo FPS).
+  - `1 - exp(-k·delta)` là công thức làm mượt **không phụ thuộc FPS**.
+
+### 11.3 `scripts/player/player_controller.gd`
+- `@export`: `character: HumanoidCharacter`, `camera: Camera3D`, `aim_height` (1.2 m), `aim_dead_zone` (0.3 m).
+- **WASD theo camera:** `Basis(Vector3.UP, camera.global_rotation.y) * Vector3(input.x, 0, input.y)`. Xoay camera kiểu isometric thì W vẫn là lên trên màn hình.
+- **Tia chuột:**
+  1. `camera.project_ray_origin(mouse)` và `project_ray_normal(mouse)` đổi điểm 2D trên màn hình thành tia 3D.
+  2. `Plane(Vector3.UP, nhân_vật + UP * aim_height).intersects_ray(...)` tìm điểm tia cắt mặt phẳng ngang cao 1.2 m (ngang nòng súng). Trả về `null` nếu tia không cắt.
+  3. `aim_direction = điểm_cắt − vị_trí_nhân_vật` (bỏ trục Y). Chuột gần chân hơn `aim_dead_zone` thì giữ hướng cũ, tránh nhân vật giật.
+- `Player` là cha của `SwatCharacter`, nên `_physics_process` của controller chạy **trước** nhân vật. Lệnh luôn được gán trước khi nhân vật di chuyển trong cùng frame.
+
+### 11.4 Dựng scene
+1. `player.tscn` theo cấu trúc 11.1. Gán export: `CameraRig.target` = `SwatCharacter`, `Player.character` = `SwatCharacter`, `Player.camera` = `CameraRig/Camera3D`.
+2. `scenes/tests/test_player.tscn`: duplicate `test_character.tscn`, bỏ script driver, xoá `SwatCharacter` và `Camera3D`, kéo `player.tscn` vào. Mở rộng sàn `(40, 0.2, 40)` và thêm vài **CSGBox3D** (Use Collision ☑) làm mốc để thấy camera di chuyển.
+
+## Bước 12: Tách hướng ngắm và hướng thân
+
+Trong `humanoid_character.gd`:
+- Đổi tên `look_direction` thành **`aim_direction`** (sửa cả `player_controller.gd` và `test_character_driver.gd`; tìm bằng **Ctrl+Shift+F**).
+- Thêm biến công khai, cho script khác đọc:
+
+  | Biến | Ý nghĩa | Ai đọc |
+  |---|---|---|
+  | `aim_yaw` | góc ngắm (radian) | debug, Bước 13 |
+  | `twist` | độ lệch ngắm so với thân, đã giới hạn ±`max_twist_angle` | `SpineTwistModifier` |
+  | `is_turning` | đang xoay chân tại chỗ | state machine (Bước 15) |
+
+- **`_update_facing(delta)`** thay cho `_apply_facing`:
+  1. `aim_yaw = atan2(-dir.x, -dir.z)`.
+  2. `diff = angle_difference(rotation.y, aim_yaw)`: độ lệch ngắn nhất, từ −180° đến 180°. **Dương = chuột bên trái thân.**
+  3. `is_moving` = tốc độ ngang > `moving_threshold` (0.2 m/s). Dùng vận tốc thật, không dùng `move_input`.
+  4. Đang đi: `rotation.y = lerp_angle(rotation.y, aim_yaw, moving_turn_speed * delta)`.
+  5. Đứng yên: máy trạng thái 2 trạng thái (**đứng im ⇄ đang xoay**) với **vùng đệm (hysteresis)**: bắt đầu xoay khi lệch > 60°, dừng khi lệch < 5°. Hai ngưỡng khác nhau để chân không giật qua lại khi chuột rung quanh mốc 60°.
+  6. `twist = clampf(angle_difference(rotation.y, aim_yaw), -max, max)`, tính **sau** khi thân đã xoay trong frame.
+
+## Bước 13: Xoay thân trên (`SpineTwistModifier`)
+
+### 13.1 `scripts/characters/spine_twist_modifier.gd`
+```gdscript
+class_name SpineTwistModifier
+extends SkeletonModifier3D
+
+var twist := 0.0
+@export var bone_weights := {&"Spine": 0.25, &"Chest": 0.35, &"UpperChest": 0.4}
+```
+- `_ready()`: tìm số thứ tự bone **một lần** bằng `find_bone`, lưu vào `_bone_ids`.
+- `_process_modification()`: với mỗi bone:
+  1. `up_in_bone = (bone_global_pose.basis.orthonormalized().inverse() * Vector3.UP).normalized()`: trục đứng của skeleton nhìn từ hệ toạ độ của bone. Nhờ vậy code không phụ thuộc vào hướng trục của từng bone.
+  2. `set_bone_pose_rotation(id, get_bone_pose_rotation(id) * Quaternion(up_in_bone, twist * weight))`. Nhân **bên phải** nghĩa là xoay thêm trong hệ của bone, sau tư thế animation.
+
+### 13.2 Vì sao tổng tỉ lệ bằng 1.0
+- Tay nối với `UpperChest`, sau này súng nằm trong tay. Ngực phải chỉ **đúng hướng chuột**, nên `Spine + Chest + UpperChest = 1.0`.
+- Chia cho 3 bone để lưng cong đều. Dồn vào 1 bone trông như gãy lưng.
+- Không đưa `Neck`/`Head` vào, vì đầu đi theo ngực là đủ, thêm vào sẽ quá tay.
+
+### 13.3 Gắn vào nhân vật (bằng code, không cần Editable Children)
+```gdscript
+@onready var skeleton: Skeleton3D = $Model/Skeleton_Reference/GeneralSkeleton
+var _spine_twist: SpineTwistModifier
+
+func _ready() -> void:
+	_spine_twist = SpineTwistModifier.new()
+	skeleton.add_child(_spine_twist)        # modifier phải là con trực tiếp của skeleton
+
+func _update_spine_twist(delta: float) -> void:   # gọi trong _physics_process
+	var weight := clampf(twist_smoothing * delta, 0.0, 1.0)
+	_spine_twist.twist = lerp_angle(_spine_twist.twist, twist, weight)
+```
+
+### 13.4 Cần biết về `SkeletonModifier3D`
+- Thứ tự mỗi frame: AnimationTree đặt tư thế → modifier cộng thêm → vẽ → Godot **khôi phục** tư thế gốc. Vì vậy góc xoay **không bị cộng dồn**.
+- Muốn đọc tư thế **đã** có phần modify (ví dụ để đo), phải đọc trong tín hiệu `skeleton.skeleton_updated`. Đọc ở thời điểm khác sẽ thấy tư thế **chưa** modify.
+- Xem modifier khi game đang chạy: dock Scene → tab **Remote** → `.../GeneralSkeleton/SpineTwistModifier`.
+
+## Bước 14: Tinh chỉnh
+
+### 14.1 Ba cải tiến trong `_update_facing`
+| Vấn đề | Cách sửa |
+|---|---|
+| Vụt chuột qua cũng làm chân xoay | **`turn_delay`** (0.1 s): bộ đếm `_over_threshold_time += delta` khi lệch quá ngưỡng, về 0 khi về trong ngưỡng. Đủ 0.1 giây mới bắt đầu xoay |
+| Chân xoay chậm dần (lerp) không giống người bước | **Xoay đều theo độ/giây:** `rotation.y = wrapf(rotation.y + clampf(diff, -step, step), -PI, PI)`, với `step = deg_to_rad(idle_turn_speed) * delta`. Thời gian xoay **biết trước**, cần cho Bước 15 |
+| Khó chỉnh vì không thấy số | **Debug:** mũi tên **đỏ** (hướng ngắm, ngang ngực), mũi tên **xanh** (hướng chân, sát sàn), `Label3D` trên đầu hiện góc thân, góc ngắm, twist và state đang phát. Bật/tắt bằng `show_debug` |
+
+- `wrapf(x, -PI, PI)` đưa góc về khoảng −180° đến 180° sau khi cộng dồn.
+- Mũi tên dùng `top_level = true` để không xoay theo thân. `Label3D` dùng `billboard` (luôn quay về camera) và `no_depth_test` (không bị model che).
+
+### 14.2 Thông số nhóm Turning
+| Thông số | Mặc định | Ý nghĩa |
+|---|---|---|
+| `max_twist_angle` | 60° | Đứng yên: lệch quá góc này thì chân xoay. Muốn xoay sớm hơn thì đặt 45 |
+| `turn_stop_angle` | 5° | Đang xoay: lệch dưới góc này thì dừng |
+| `turn_delay` | 0.1 s | Thời gian phải lệch liên tục trước khi xoay chân |
+| `idle_turn_speed` | 150°/s | Tốc độ xoay chân khi đứng yên. **Phải khớp với Timeline Length ở Bước 15** |
+| `moving_turn_speed` | 12 | Tốc độ thân bám theo hướng ngắm khi đang đi |
+| `moving_threshold` | 0.2 m/s | Nhanh hơn mức này coi là đang đi |
+| `twist_smoothing` | 15 | Độ mượt của thân trên |
+
+### 14.3 Chỉnh khi game đang chạy
+F6 → dock Scene → tab **Remote** → chọn `Player/SwatCharacter` → đổi số trong Inspector, có tác dụng ngay. Giá trị trong Remote **không tự lưu**: ghi lại rồi nhập vào `swat_character.tscn` sau khi dừng game.
+
+## Bước 15: Animation xoay tại chỗ
+
+### 15.1 Chuẩn bị clip
+Làm theo 6.4b: `make_turn_in_place.py` rồi `make_in_place.py` cho `rifle_turn_left` và `rifle_turn_right`. Ghi lại góc: **77°** (trái), **85°** (phải).
+
+### 15.2 Thêm state vào State Machine
+Trong `swat_character.tscn` → `AnimationTree`:
+1. Chuột phải → **Add Animation** → `humanoid_rifle/rifle_turn_left`, đặt tên **`TurnLeft`**. Làm tương tự với `TurnRight`.
+2. Click **một lần** vào từng node → Inspector:
+
+   | Thuộc tính | `TurnLeft` | `TurnRight` |
+   |---|---|---|
+   | Use Custom Timeline | ☑ | ☑ |
+   | **Timeline Length** | **0.51** | **0.57** |
+   | Stretch Time Scale | ☑ | ☑ |
+   | Loop Mode | Linear | Linear |
+
+   **Công thức:** `Timeline Length = góc của clip ÷ idle_turn_speed`. Trái: 77 / 150 = 0.51. Phải: 85 / 150 = 0.57. Chân trong animation xoay cùng tốc độ với thân thì bàn chân mới không trượt.
+3. Nối 4 mũi tên: `Locomotion ⇄ TurnLeft`, `Locomotion ⇄ TurnRight`. Mỗi mũi tên đặt:
+   - **Xfade Time** `0.15`
+   - **Switch Mode** `Immediate`
+   - **Advance Mode** **`Enabled`** (mặc định). **KHÔNG** đặt Auto: Auto làm state machine tự nhảy sang Turn dù nhân vật không xoay. Chỉ `Start → Locomotion` mới là Auto.
+
+### 15.3 Code
+```gdscript
+@export var idle_turn_speed := 150.0
+const PLAYBACK_PATH := &"parameters/playback"
+var _playback: AnimationNodeStateMachinePlayback
+var _anim_state := &"Locomotion"
+
+func _ready() -> void:
+	_playback = anim_tree.get(PLAYBACK_PATH)
+	...
+
+func _update_state_machine() -> void:   # gọi ngay sau _update_facing
+	var wanted := &"Locomotion"
+	if is_turning:
+		wanted = &"TurnLeft" if angle_difference(rotation.y, aim_yaw) > 0.0 else &"TurnRight"
+	if wanted != _anim_state:
+		_anim_state = wanted
+		_playback.travel(wanted)
+```
+- `parameters/playback` là đối tượng điều khiển state machine. `travel(tên)` tự tìm đường theo các mũi tên và trộn theo Xfade Time.
+- Chỉ gọi `travel()` khi state mong muốn **thay đổi**. Gọi mỗi frame có thể làm animation khựng.
+- Chiều xoay dùng cùng quy ước dấu với `twist`: dương là trái.
+
+### 15.4 Tinh chỉnh tốc độ xoay
+Đổi `idle_turn_speed` thì **phải đổi Timeline Length** theo công thức:
+
+| Muốn | `idle_turn_speed` | TurnLeft | TurnRight |
+|---|---|---|---|
+| Chậm, nặng nề | 100 | 0.77 | 0.85 |
+| **Mặc định** | **150** | **0.51** | **0.57** |
+| Nhanh, kiểu arcade | 200 | 0.39 | 0.43 |
+
+Bàn chân trượt về phía trước thì **giảm** Timeline Length. Bước chân quá dồn dập thì **tăng**.
+
+### 15.5 Kiểm tra (F6 trên `test_player.tscn`)
+| Thao tác | Kết quả mong đợi |
+|---|---|
+| Đứng yên, chuột lệch dưới 60° | Chữ debug `Locomotion`, mũi tên xanh đứng im, ngực vặn theo mũi tên đỏ |
+| Vụt chuột ra sau rồi trả lại nhanh | Chân không xoay |
+| Đứng yên, lệch khoảng 90° sang trái | `TurnLeft`, chân bước xoay khoảng 0.6 s, rồi về `Locomotion` |
+| Lệch sang phải | `TurnRight` |
+| Lệch 150° | Clip xoay lặp lại, xoay khoảng 1 s |
+| Đang xoay thì bấm W | Về ngay `Locomotion`, đi bình thường |
+| Giữ W + D, nhìn lên | Phát đúng clip `walk_forward_right` (blend khoảng (0.71, 0.71)) |
 
 ---
 
@@ -581,6 +832,10 @@ Blender tạo file `.blend1` mỗi lần lưu đè. Quy tắc LFS `*.blend` khô
 | Scene `.tscn` có hàng chục dòng `bones/N/rotation` | Lưu scene khi animation đang phát | Stop rồi mới lưu. Revert pose trên `GeneralSkeleton` |
 | Nhân vật đi được một đoạn rồi giật về chỗ cũ mỗi vòng | Animation walk không In Place | Chạy `make_in_place.py` (6.4) |
 | File `.blend1` xuất hiện trong git status | Bản backup tự động của Blender | Xoá và thêm `*.blend1` vào `.gitignore` |
+| Script Blender báo góc/độ trôi bằng 0 dù animation có chuyển động | File `.blend` được lưu lúc armature ở **Edit Mode**, Blender không tính tư thế | Script đã tự chuyển Object Mode. Lần sau Tab về Object Mode trước khi Ctrl+S |
+| Animation turn làm nhân vật xoay gấp đôi | Clip còn phần xoay hông | Chạy `make_turn_in_place.py` (6.4b) |
+| Cảnh báo `ext_resource, invalid UID … using text path instead` | Clip được tạo lại với UID mới, library còn UID cũ | Bấm 💾 ở Manage Animations, hoặc Project → Tools → Upgrade Project Files (7.1) |
+| Có file `*.tscn12345678.tmp` cạnh scene | Godot lưu dở | Xoá file `.tmp` |
 
 ### AnimationTree và nhân vật
 | Triệu chứng | Nguyên nhân | Cách sửa |
@@ -598,6 +853,22 @@ Blender tạo file `.blend1` mỗi lần lưu đè. Quy tắc LFS `*.blend` khô
 | Đi chéo nhanh hơn đi thẳng | Thiếu `limit_length(1.0)` | Xem 9.1 |
 | Xoay người đôi khi quay vòng dài | Dùng `lerp` thay cho `lerp_angle` | Xem 9.2 |
 | Chân trượt trên sàn khi đi | `walk_speed` khác tốc độ của animation | Đặt khoảng 1.8 m/s (6.4) |
+| Đi chéo hết tốc độ nhưng không phát đúng clip chéo | Điểm chéo trong BlendSpace đặt ở (±0.5, ±0.5) | Đặt ở **(±0.71, ±0.71)** (8.6) |
+| Giật khi chuyển từ đứng yên sang đi | Nhiều điểm idle trùng ở (0, 0) trong BlendSpace | Chỉ giữ 1 điểm idle (8.6) |
+
+### Điều khiển người chơi
+| Triệu chứng | Nguyên nhân | Cách sửa |
+|---|---|---|
+| `Class "HumanoidCharacter" hides a global script class` tại `swat_character.tscn::GDScript_…` | `SwatCharacter` đang dùng **script nhúng (built-in)** trùng `class_name` với file `.gd`. Nhân vật thành CharacterBody3D trống, không di chuyển | Trong editor: đóng tab script nhúng (Don't Save) → Detach Script → kéo `humanoid_character.gd` vào → kiểm tra Inspector → Ctrl+S |
+| Đã sửa file `.tscn` bên ngoài nhưng lỗi script nhúng quay lại | Scene đang mở trong editor vẫn giữ bản cũ trong bộ nhớ, Ctrl+S ghi đè | Sửa **trong editor**, hoặc Reload Current Project và chọn Don't Save |
+| Nhân vật không xoay theo chuột | Controller chưa gán export `character` / `camera`, hoặc còn dùng tên cũ `look_direction` | Gán export (11.4). Tìm `look_direction` bằng Ctrl+Shift+F, đổi thành `aim_direction` |
+| Camera quay vòng theo nhân vật | Camera là con của `SwatCharacter` | Camera nằm trong `CameraRig` riêng (11.1) |
+| Nhân vật giật qua lại khi chuột ở sát chân | Hướng ngắm thay đổi quá mạnh khi chuột rất gần | `aim_dead_zone` khoảng 0.3 m (11.3) |
+| Chân giật qua lại khi chuột rung quanh mốc 60° | Chỉ dùng một ngưỡng | Hai ngưỡng bắt đầu / dừng khác nhau (hysteresis, Bước 12) |
+| Lia chuột nhanh cũng làm chân bước xoay | Không có độ trễ | `turn_delay` khoảng 0.1 s (14.1) |
+| State machine tự nhảy sang TurnLeft dù nhân vật không xoay | Mũi tên `Locomotion → TurnLeft` đặt Advance Mode = Auto | Đặt **Enabled**, để code gọi `travel()` (15.2) |
+| Bàn chân trượt khi xoay tại chỗ | Timeline Length không khớp `idle_turn_speed` | `Timeline Length = góc clip ÷ idle_turn_speed` (15.4) |
+| Đo tư thế bằng code không thấy phần xoay thân trên | Đọc tư thế ngoài thời điểm modifier chạy | Đọc trong tín hiệu `skeleton_updated` (13.4) |
 
 ---
 
@@ -606,11 +877,11 @@ Blender tạo file `.blend1` mỗi lần lưu đè. Quy tắc LFS `*.blend` khô
 | Giai đoạn | Nội dung | Trạng thái |
 |---|---|---|
 | 0 | Chuẩn bị asset: skeleton, SWAT, material, BoneMap | ✅ |
-| 1 | Pipeline animation: idle, walk forward/backward/left/right, In Place, 1 BoneMap | ✅ |
+| 1 | Pipeline animation: idle, walk 8 hướng, turn trái/phải, In Place, 1 BoneMap, script Blender | ✅ |
 | 2 | Scene nhân vật: `swat_character.tscn`, AnimationTree (BlendSpace2D), `humanoid_character.gd`, scene test | ✅ |
-| 3 | Vũ khí: model súng, gắn vào tay (`BoneAttachment3D`), `WeaponData`, bắn hitscan, nạp đạn, hiệu ứng | ⏭ Tiếp theo |
-| 4 | Điều khiển người chơi top-down: camera đi theo, WASD theo camera, ngắm theo chuột | ⬜ |
+| 3 | Điều khiển người chơi: ngắm theo chuột, camera đi theo, WASD theo camera, xoay thân trên (`SpineTwistModifier`), xoay tại chỗ (TurnLeft/TurnRight) | ✅ |
+| 4 | Vũ khí: model súng (SCAR-L đã kiểm tra, cần chuẩn hoá), gắn vào tay (`BoneAttachment3D`), `WeaponData`, bắn hitscan, nạp đạn, hiệu ứng | ⏸ Tạm hoãn |
 | 5 | Chiến đấu: máu, hitbox/hurtbox, animation thân trên (bắn, nạp đạn, trúng đạn, chết) | ⬜ |
-| 6 | Kẻ địch: Navigation, AI | ⬜ |
+| 6 | Kẻ địch: Navigation, AI (dùng lại `HumanoidCharacter`, chỉ thay controller) | ⬜ |
 | 7 | Vòng lặp game: wave, HUD, menu | ⬜ |
-| 8 | Hoàn thiện: xoay thân trên khi ngắm, xoay tại chỗ, SFX, VFX, tối ưu | ⬜ |
+| 8 | Hoàn thiện: chạy nhanh (sprint), foot IK, SFX, VFX, tối ưu | ⬜ |
