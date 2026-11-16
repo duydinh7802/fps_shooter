@@ -7,6 +7,10 @@ ROOT_BONE = "Hips"
 arm = bpy.context.view_layer.objects.active
 if arm is None or arm.type != 'ARMATURE':
     arm = next(o for o in bpy.data.objects if o.type == 'ARMATURE')
+# Ở Edit Mode, Blender không tính tư thế animation → phải về Object Mode trước
+bpy.context.view_layer.objects.active = arm
+if arm.mode != 'OBJECT':
+    bpy.ops.object.mode_set(mode='OBJECT')
 action = arm.animation_data.action
 pb = arm.pose.bones[ROOT_BONE]
 f0, f1 = (int(round(x)) for x in action.frame_range)
