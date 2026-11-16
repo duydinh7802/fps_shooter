@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://de0vcgln8cv08"
-path="res://.godot/imported/rifle_walk_backward.blend-b673ec52c629b1c2e3ee47dbed28f5bc.scn"
+path="res://.godot/imported/rifle_walk_backward.blend-261d228e464247060a863b5afb2fb566.scn"
 
 [deps]
 
-source_file="res://assets/characters/animations/humanoid/blender/rifle_walk_backward.blend"
-dest_files=["res://.godot/imported/rifle_walk_backward.blend-b673ec52c629b1c2e3ee47dbed28f5bc.scn"]
+source_file="res://assets/characters/animations/humanoid/source/rifle_walk_backward.blend"
+dest_files=["res://.godot/imported/rifle_walk_backward.blend-261d228e464247060a863b5afb2fb566.scn"]
 
 [params]
 

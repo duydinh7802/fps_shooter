@@ -1,0 +1,65 @@
+[gd_scene load_steps=12 format=3 uid="uid://b74s6ucl1yvmc"]
+
+[ext_resource type="Script" uid="uid://dteu2j5j672qn" path="res://scripts/characters/humanoid_character.gd" id="1_cgn6f"]
+[ext_resource type="PackedScene" uid="uid://cgcipwp6uwnjk" path="res://scenes/characters/swat/swat_model.tscn" id="1_rl4ey"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_ow5n7"]
+radius = 0.3
+height = 1.75
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_rl4ey"]
+animation = &"humanoid_rifle/rifle_idle"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_cgn6f"]
+animation = &"humanoid_rifle/rifle_walk_right"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_mlsfa"]
+animation = &"humanoid_rifle/rifle_walk_left"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_sxga5"]
+animation = &"humanoid_rifle/rifle_walk_backward"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_3wamu"]
+animation = &"humanoid_rifle/rifle_walk_forward"
+
+[sub_resource type="AnimationNodeBlendSpace2D" id="AnimationNodeBlendSpace2D_rl4ey"]
+blend_point_0/node = SubResource("AnimationNodeAnimation_rl4ey")
+blend_point_0/pos = Vector2(0, 0)
+blend_point_1/node = SubResource("AnimationNodeAnimation_cgn6f")
+blend_point_1/pos = Vector2(1, 0)
+blend_point_2/node = SubResource("AnimationNodeAnimation_mlsfa")
+blend_point_2/pos = Vector2(-1, 0)
+blend_point_3/node = SubResource("AnimationNodeAnimation_sxga5")
+blend_point_3/pos = Vector2(0, -1)
+blend_point_4/node = SubResource("AnimationNodeAnimation_3wamu")
+blend_point_4/pos = Vector2(0, 1)
+x_label = "right"
+y_label = "forward"
+sync = true
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_cgn6f"]
+advance_mode = 2
+
+[sub_resource type="AnimationNodeStateMachine" id="AnimationNodeStateMachine_rl4ey"]
+states/Locomotion/node = SubResource("AnimationNodeBlendSpace2D_rl4ey")
+states/Locomotion/position = Vector2(-127, 145)
+states/Start/position = Vector2(-332, 132)
+transitions = ["Start", "Locomotion", SubResource("AnimationNodeStateMachineTransition_cgn6f")]
+graph_offset = Vector2(-583, 0)
+
+[node name="SwatCharacter" type="CharacterBody3D"]
+script = ExtResource("1_cgn6f")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.875, 0)
+shape = SubResource("CapsuleShape3D_ow5n7")
+
+[node name="Model" parent="." instance=ExtResource("1_rl4ey")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
+
+[node name="AnimationTree" type="AnimationTree" parent="."]
+root_node = NodePath("../Model")
+callback_mode_process = 0
+tree_root = SubResource("AnimationNodeStateMachine_rl4ey")
+anim_player = NodePath("../Model/AnimationPlayer")
+parameters/Locomotion/blend_position = Vector2(-0.9974874, -0.004484296)
