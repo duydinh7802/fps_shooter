@@ -8,31 +8,31 @@ radius = 0.3
 height = 1.75
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_cgn6f"]
-animation = &"humanoid_rifle/rifle_walk_right"
+animation = &"locomotion/walk_right"
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_mlsfa"]
-animation = &"humanoid_rifle/rifle_walk_left"
+animation = &"locomotion/walk_left"
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_sxga5"]
-animation = &"humanoid_rifle/rifle_walk_backward"
+animation = &"locomotion/walk_backward"
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_3wamu"]
-animation = &"humanoid_rifle/rifle_walk_forward"
+animation = &"locomotion/walk_forward"
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_86jxv"]
-animation = &"humanoid_rifle/rifle_walk_forward_right"
+animation = &"locomotion/walk_forward_right"
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_qtpdt"]
-animation = &"humanoid_rifle/rifle_walk_forward_left"
+animation = &"locomotion/walk_forward_left"
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_fj0r2"]
-animation = &"humanoid_rifle/rifle_walk_backward_left"
+animation = &"locomotion/walk_backward_left"
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_u5g5n"]
-animation = &"humanoid_rifle/rifle_walk_backward_right"
+animation = &"locomotion/walk_backward_right"
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_6amnu"]
-animation = &"humanoid_rifle/rifle_idle"
+animation = &"locomotion/idle"
 
 [sub_resource type="AnimationNodeBlendSpace2D" id="AnimationNodeBlendSpace2D_rl4ey"]
 blend_point_0/node = SubResource("AnimationNodeAnimation_cgn6f")
@@ -59,7 +59,7 @@ y_label = "forward"
 sync = true
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_rl4ey"]
-animation = &"humanoid_rifle/rifle_turn_left"
+animation = &"locomotion/turn_left"
 use_custom_timeline = true
 timeline_length = 0.51
 stretch_time_scale = true
@@ -67,7 +67,7 @@ start_offset = 0.0
 loop_mode = 1
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_l1no8"]
-animation = &"humanoid_rifle/rifle_turn_right"
+animation = &"locomotion/turn_right"
 use_custom_timeline = true
 timeline_length = 0.57
 stretch_time_scale = true
@@ -96,9 +96,9 @@ states/Start/position = Vector2(-313, 231)
 states/TurnLeft/node = SubResource("AnimationNodeAnimation_rl4ey")
 states/TurnLeft/position = Vector2(-132, 130)
 states/TurnRight/node = SubResource("AnimationNodeAnimation_l1no8")
-states/TurnRight/position = Vector2(-132, 327)
+states/TurnRight/position = Vector2(-132, 329)
 transitions = ["Start", "Locomotion", SubResource("AnimationNodeStateMachineTransition_cgn6f"), "Locomotion", "TurnLeft", SubResource("AnimationNodeStateMachineTransition_6amnu"), "Locomotion", "TurnRight", SubResource("AnimationNodeStateMachineTransition_p5go4"), "TurnLeft", "Locomotion", SubResource("AnimationNodeStateMachineTransition_p7qs8"), "TurnRight", "Locomotion", SubResource("AnimationNodeStateMachineTransition_x7p40")]
-graph_offset = Vector2(-583, 0)
+graph_offset = Vector2(-547.6453, 53.228256)
 
 [node name="SwatCharacter" type="CharacterBody3D"]
 script = ExtResource("1_cgn6f")
@@ -115,4 +115,4 @@ root_node = NodePath("../Model")
 callback_mode_process = 0
 tree_root = SubResource("AnimationNodeStateMachine_rl4ey")
 anim_player = NodePath("../Model/AnimationPlayer")
-parameters/Locomotion/blend_position = Vector2(-0.5, 0.5051546)
+parameters/Locomotion/blend_position = Vector2(0.7078353, 0.72727275)

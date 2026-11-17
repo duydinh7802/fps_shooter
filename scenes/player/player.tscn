@@ -10,6 +10,7 @@ character = NodePath("SwatCharacter")
 camera = NodePath("CameraRig/Camera3D")
 
 [node name="SwatCharacter" parent="." instance=ExtResource("2_gmlin")]
+show_debug = false
 
 [node name="CameraRig" type="Node3D" parent="." node_paths=PackedStringArray("target")]
 script = ExtResource("3_lvxji")

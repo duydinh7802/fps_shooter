@@ -41,7 +41,7 @@ _subresources={
 "animations": {
 "mixamo_com": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/characters/animations/humanoid/clips/rifle_walk_backward_right.res",
+"save_to_file/fallback_path": "res://assets/characters/animations/humanoid/clips/walk_backward_right.res",
 "save_to_file/keep_custom_tracks": "",
 "save_to_file/path": "uid://yhgrwe5e5q7c",
 "settings/loop_mode": 1,
