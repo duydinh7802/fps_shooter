@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://ioufbi67icf1"
-path="res://.godot/imported/rifle_turn_right.blend-eee854ef47b0fdf0ec19fcec0db6407c.scn"
+uid="uid://nrt6i3oar74p"
+path="res://.godot/imported/sprint_right.blend-2b7a369eb24bf9575e4eb8919bab0ebb.scn"
 
 [deps]
 
-source_file="res://assets/characters/animations/humanoid/source/rifle_turn_right.blend"
-dest_files=["res://.godot/imported/rifle_turn_right.blend-eee854ef47b0fdf0ec19fcec0db6407c.scn"]
+source_file="res://assets/characters/animations/humanoid/source/sprint_right.blend"
+dest_files=["res://.godot/imported/sprint_right.blend-2b7a369eb24bf9575e4eb8919bab0ebb.scn"]
 
 [params]
 
@@ -41,9 +41,9 @@ _subresources={
 "animations": {
 "mixamo_com": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/characters/animations/humanoid/clips/turn_right.res",
+"save_to_file/fallback_path": "res://assets/characters/animations/humanoid/clips/sprint_right.res",
 "save_to_file/keep_custom_tracks": "",
-"save_to_file/path": "uid://cmj6a02mrxcn7",
+"save_to_file/path": "uid://ddn28wb46pylw",
 "settings/loop_mode": 1,
 "slice_1/end_frame": 0,
 "slice_1/loop_mode": 0,

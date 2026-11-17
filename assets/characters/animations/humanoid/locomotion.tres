@@ -1,20 +1,36 @@
-[gd_resource type="AnimationLibrary" load_steps=12 format=3 uid="uid://bws6jp3cl8x7j"]
+[gd_resource type="AnimationLibrary" load_steps=20 format=3 uid="uid://bws6jp3cl8x7j"]
 
 [ext_resource type="Animation" uid="uid://dcae6wmtvvgq1" path="res://assets/characters/animations/humanoid/clips/idle.res" id="1_y8nsn"]
 [ext_resource type="Animation" uid="uid://c72140gxkrat6" path="res://assets/characters/animations/humanoid/clips/walk_forward.res" id="2_qw31l"]
 [ext_resource type="Animation" uid="uid://d8g7tcyt0sba" path="res://assets/characters/animations/humanoid/clips/walk_left.res" id="3_mk5sv"]
 [ext_resource type="Animation" uid="uid://dn8vdikwvg2v7" path="res://assets/characters/animations/humanoid/clips/walk_right.res" id="4_1ejqx"]
 [ext_resource type="Animation" uid="uid://d1nnen2ssprr8" path="res://assets/characters/animations/humanoid/clips/walk_backward.res" id="5_mk5sv"]
-[ext_resource type="Animation" uid="uid://sompddyrbo5y" path="res://assets/characters/animations/humanoid/clips/walk_backward_left.res" id="6_pnrj0"]
+[ext_resource type="Animation" uid="uid://1wtljsbbv4hr" path="res://assets/characters/animations/humanoid/clips/walk_backward_left.res" id="6_pnrj0"]
 [ext_resource type="Animation" uid="uid://yhgrwe5e5q7c" path="res://assets/characters/animations/humanoid/clips/walk_backward_right.res" id="7_3f8k6"]
-[ext_resource type="Animation" uid="uid://ckdurrdog7v20" path="res://assets/characters/animations/humanoid/clips/walk_forward_left.res" id="8_8fm83"]
-[ext_resource type="Animation" uid="uid://ebuxdcrg328p" path="res://assets/characters/animations/humanoid/clips/walk_forward_right.res" id="9_arhwn"]
+[ext_resource type="Animation" uid="uid://b41m00eakwfa" path="res://assets/characters/animations/humanoid/clips/walk_forward_left.res" id="8_8fm83"]
+[ext_resource type="Animation" uid="uid://b020xrh51nh6s" path="res://assets/characters/animations/humanoid/clips/walk_forward_right.res" id="9_arhwn"]
 [ext_resource type="Animation" uid="uid://dxp6vdsmgcq1q" path="res://assets/characters/animations/humanoid/clips/turn_left.res" id="10_8fm83"]
 [ext_resource type="Animation" uid="uid://cmj6a02mrxcn7" path="res://assets/characters/animations/humanoid/clips/turn_right.res" id="11_arhwn"]
+[ext_resource type="Animation" uid="uid://bwgch15n6o002" path="res://assets/characters/animations/humanoid/clips/sprint_backward.res" id="12_51vxi"]
+[ext_resource type="Animation" uid="uid://br50rs43t2rnb" path="res://assets/characters/animations/humanoid/clips/sprint_backward_left.res" id="13_w1b60"]
+[ext_resource type="Animation" uid="uid://cpjj7knj2t0j8" path="res://assets/characters/animations/humanoid/clips/sprint_backward_right.res" id="14_r2jlh"]
+[ext_resource type="Animation" uid="uid://du6lolv3cplin" path="res://assets/characters/animations/humanoid/clips/sprint_forward.res" id="15_hd4n7"]
+[ext_resource type="Animation" uid="uid://cam6humssgp1e" path="res://assets/characters/animations/humanoid/clips/sprint_forward_left.res" id="16_may54"]
+[ext_resource type="Animation" uid="uid://b2f07wa0khao" path="res://assets/characters/animations/humanoid/clips/sprint_forward_right.res" id="17_o03kw"]
+[ext_resource type="Animation" uid="uid://s2bge0libq6m" path="res://assets/characters/animations/humanoid/clips/sprint_left.res" id="18_03skg"]
+[ext_resource type="Animation" uid="uid://fh8qxnv38weu" path="res://assets/characters/animations/humanoid/clips/sprint_right.res" id="19_ndyn0"]
 
 [resource]
 _data = {
 &"idle": ExtResource("1_y8nsn"),
+&"sprint_backward": ExtResource("12_51vxi"),
+&"sprint_backward_left": ExtResource("13_w1b60"),
+&"sprint_backward_right": ExtResource("14_r2jlh"),
+&"sprint_forward": ExtResource("15_hd4n7"),
+&"sprint_forward_left": ExtResource("16_may54"),
+&"sprint_forward_right": ExtResource("17_o03kw"),
+&"sprint_left": ExtResource("18_03skg"),
+&"sprint_right": ExtResource("19_ndyn0"),
 &"turn_left": ExtResource("10_8fm83"),
 &"turn_right": ExtResource("11_arhwn"),
 &"walk_backward": ExtResource("5_mk5sv"),

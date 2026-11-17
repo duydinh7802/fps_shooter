@@ -1,4 +1,4 @@
-[gd_scene load_steps=22 format=3 uid="uid://b74s6ucl1yvmc"]
+[gd_scene load_steps=30 format=3 uid="uid://b74s6ucl1yvmc"]
 
 [ext_resource type="Script" uid="uid://dteu2j5j672qn" path="res://scripts/characters/humanoid_character.gd" id="1_cgn6f"]
 [ext_resource type="PackedScene" uid="uid://cgcipwp6uwnjk" path="res://scenes/characters/swat/swat_model.tscn" id="1_rl4ey"]
@@ -12,6 +12,27 @@ animation = &"locomotion/walk_right"
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_mlsfa"]
 animation = &"locomotion/walk_left"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_p5go4"]
+animation = &"locomotion/sprint_backward"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_p7qs8"]
+animation = &"locomotion/sprint_left"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_x7p40"]
+animation = &"locomotion/sprint_right"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_xh658"]
+animation = &"locomotion/sprint_forward_right"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_cu8o7"]
+animation = &"locomotion/sprint_forward_left"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_xq2fm"]
+animation = &"locomotion/sprint_backward_left"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_s8kci"]
+animation = &"locomotion/sprint_backward_right"
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_sxga5"]
 animation = &"locomotion/walk_backward"
@@ -34,6 +55,9 @@ animation = &"locomotion/walk_backward_right"
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_6amnu"]
 animation = &"locomotion/idle"
 
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_5i0rs"]
+animation = &"locomotion/sprint_forward"
+
 [sub_resource type="AnimationNodeBlendSpace2D" id="AnimationNodeBlendSpace2D_rl4ey"]
 blend_point_0/node = SubResource("AnimationNodeAnimation_cgn6f")
 blend_point_0/pos = Vector2(1, 0)
@@ -53,6 +77,24 @@ blend_point_7/node = SubResource("AnimationNodeAnimation_u5g5n")
 blend_point_7/pos = Vector2(0.71, -0.71)
 blend_point_8/node = SubResource("AnimationNodeAnimation_6amnu")
 blend_point_8/pos = Vector2(0, 0)
+blend_point_9/node = SubResource("AnimationNodeAnimation_5i0rs")
+blend_point_9/pos = Vector2(0, 3.2)
+blend_point_10/node = SubResource("AnimationNodeAnimation_p5go4")
+blend_point_10/pos = Vector2(0, -3.2)
+blend_point_11/node = SubResource("AnimationNodeAnimation_p7qs8")
+blend_point_11/pos = Vector2(-3.2, 0)
+blend_point_12/node = SubResource("AnimationNodeAnimation_x7p40")
+blend_point_12/pos = Vector2(3.2, 0)
+blend_point_13/node = SubResource("AnimationNodeAnimation_xh658")
+blend_point_13/pos = Vector2(2.26, 2.26)
+blend_point_14/node = SubResource("AnimationNodeAnimation_cu8o7")
+blend_point_14/pos = Vector2(-2.26, 2.26)
+blend_point_15/node = SubResource("AnimationNodeAnimation_xq2fm")
+blend_point_15/pos = Vector2(-2.26, -2.26)
+blend_point_16/node = SubResource("AnimationNodeAnimation_s8kci")
+blend_point_16/pos = Vector2(2.26, -2.26)
+min_space = Vector2(-3.5, -3.5)
+max_space = Vector2(3.5, 3.5)
 snap = Vector2(0.1, 0.17)
 x_label = "right"
 y_label = "forward"
@@ -115,4 +157,4 @@ root_node = NodePath("../Model")
 callback_mode_process = 0
 tree_root = SubResource("AnimationNodeStateMachine_rl4ey")
 anim_player = NodePath("../Model/AnimationPlayer")
-parameters/Locomotion/blend_position = Vector2(0.7078353, 0.72727275)
+parameters/Locomotion/blend_position = Vector2(-0.013240814, 3.181818)

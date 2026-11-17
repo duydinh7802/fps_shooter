@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://b3gqxopumyw4e"
-path="res://.godot/imported/rifle_idle.blend-34dd050ea096f46173a7260276f2302f.scn"
+uid="uid://r81la4dqj8ea"
+path="res://.godot/imported/walk_right.blend-ee9c9cbc5efdde6644ef1819cfff743b.scn"
 
 [deps]
 
-source_file="res://assets/characters/animations/humanoid/source/rifle_idle.blend"
-dest_files=["res://.godot/imported/rifle_idle.blend-34dd050ea096f46173a7260276f2302f.scn"]
+source_file="res://assets/characters/animations/humanoid/source/walk_right.blend"
+dest_files=["res://.godot/imported/walk_right.blend-ee9c9cbc5efdde6644ef1819cfff743b.scn"]
 
 [params]
 
@@ -41,9 +41,9 @@ _subresources={
 "animations": {
 "mixamo_com": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/characters/animations/humanoid/clips/idle.res",
+"save_to_file/fallback_path": "res://assets/characters/animations/humanoid/clips/walk_right.res",
 "save_to_file/keep_custom_tracks": "",
-"save_to_file/path": "uid://dcae6wmtvvgq1",
+"save_to_file/path": "uid://dn8vdikwvg2v7",
 "settings/loop_mode": 1,
 "slice_1/end_frame": 0,
 "slice_1/loop_mode": 0,

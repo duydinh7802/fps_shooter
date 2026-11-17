@@ -5,6 +5,7 @@ extends CharacterBody3D
 
 @export_group("Movement")
 @export var walk_speed := 1.8        ## m/s, khớp tốc độ của animation walk Mixamo
+@export var run_speed := 5.8         ## m/s, khớp tốc độ của animation sprint (giữ Shift)
 @export var acceleration := 12.0     ## m/s² khi tăng tốc hoặc giảm tốc
 @export var blend_smoothing := 10.0  ## độ mượt khi chuyển blend_position
 
@@ -24,6 +25,8 @@ extends CharacterBody3D
 var move_input := Vector3.ZERO
 ## Hướng muốn ngắm, toạ độ thế giới. Mặc định là −Z (phía trước của Godot)
 var aim_direction := Vector3.FORWARD
+## true khi đang giữ nút chạy (controller gán)
+var is_running := false
 
 ## Góc ngắm (radian), tính từ aim_direction
 var aim_yaw := 0.0
@@ -67,7 +70,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _apply_movement(delta: float) -> void:
-	var target := Vector3(move_input.x, 0.0, move_input.z).limit_length(1.0) * walk_speed
+	var max_speed := run_speed if is_running else walk_speed
+	var target := Vector3(move_input.x, 0.0, move_input.z).limit_length(1.0) * max_speed
 	var horizontal := Vector3(velocity.x, 0.0, velocity.z).move_toward(target, acceleration * delta)
 	velocity.x = horizontal.x
 	velocity.z = horizontal.z
@@ -124,7 +128,7 @@ func _update_animation(delta: float) -> void:
 	# Đổi vận tốc sang hệ toạ độ của thân: x = sang phải, −z = phía trước
 	var local := global_basis.inverse() * Vector3(velocity.x, 0.0, velocity.z)
 	var target := Vector2(local.x, -local.z) / walk_speed
-	_blend = _blend.lerp(target.limit_length(1.0), clampf(blend_smoothing * delta, 0.0, 1.0))
+	_blend = _blend.lerp(target.limit_length(run_speed / walk_speed), clampf(blend_smoothing * delta, 0.0, 1.0))
 	anim_tree.set(BLEND_PATH, _blend)
 
 

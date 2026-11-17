@@ -13,6 +13,7 @@ func _physics_process(_delta: float) -> void:
 	if character == null or camera == null:
 		return
 	character.move_input = _get_move_input()
+	character.is_running = Input.is_action_pressed("run")
 	var aim_point = _get_aim_point()
 	if aim_point != null:
 		var to_aim: Vector3 = aim_point - character.global_position

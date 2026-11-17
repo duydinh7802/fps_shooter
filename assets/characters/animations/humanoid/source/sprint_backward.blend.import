@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://de0vcgln8cv08"
-path="res://.godot/imported/rifle_walk_backward.blend-261d228e464247060a863b5afb2fb566.scn"
+uid="uid://3dsaldrms14f"
+path="res://.godot/imported/sprint_backward.blend-87c09b9f3b29ca1e493d616ef91c614a.scn"
 
 [deps]
 
-source_file="res://assets/characters/animations/humanoid/source/rifle_walk_backward.blend"
-dest_files=["res://.godot/imported/rifle_walk_backward.blend-261d228e464247060a863b5afb2fb566.scn"]
+source_file="res://assets/characters/animations/humanoid/source/sprint_backward.blend"
+dest_files=["res://.godot/imported/sprint_backward.blend-87c09b9f3b29ca1e493d616ef91c614a.scn"]
 
 [params]
 
@@ -41,9 +41,9 @@ _subresources={
 "animations": {
 "mixamo_com": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/characters/animations/humanoid/clips/walk_backward.res",
+"save_to_file/fallback_path": "res://assets/characters/animations/humanoid/clips/sprint_backward.res",
 "save_to_file/keep_custom_tracks": "",
-"save_to_file/path": "uid://d1nnen2ssprr8",
+"save_to_file/path": "uid://dm76xyatw32hc",
 "settings/loop_mode": 1,
 "slice_1/end_frame": 0,
 "slice_1/loop_mode": 0,

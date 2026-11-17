@@ -8,6 +8,8 @@ extends Node3D
 
 
 func _ready() -> void:
+	# Rig tự di chuyển trong _process (mỗi frame hình), nên tắt nội suy vật lý cho nó (và Camera3D con)
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	if target:
 		global_position = target.global_position  # vào game là đứng ngay trên nhân vật, không trượt từ xa tới
 
@@ -15,5 +17,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if target == null:
 		return
+	# Vị trí ĐÃ NỘI SUY của nhân vật: mượt ở mọi tần số màn hình, không nhảy theo bước vật lý 60 Hz
+	var target_pos := target.get_global_transform_interpolated().origin
 	var weight := 1.0 - exp(-follow_speed * delta)
-	global_position = global_position.lerp(target.global_position, weight)
+	global_position = global_position.lerp(target_pos, weight)
