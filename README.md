@@ -59,7 +59,7 @@ Mixamo animation ──► Bước 6: Blender (bỏ prefix, In Place) ───�
                                                                                      │
                             Bước 8–10: swat_character.tscn (AnimationTree + script) ◄┘
                                                                                      │
-                Bước 11–15: player.tscn (ngắm chuột, camera, xoay thân trên, xoay tại chỗ) ◄┘
+                Bước 11–17: player.tscn (ngắm chuột, camera, xoay thân trên, xoay tại chỗ, sprint) ◄┘
 ```
 
 **Nguyên tắc cốt lõi:** mọi nhân vật và mọi animation đều dùng **cùng một bộ xương** (tên bone giống hệt `skeleton_reference`). Godot đổi tên tất cả về tên chuẩn của `SkeletonProfileHumanoid` qua **một file BoneMap duy nhất**: `humanoid_bone_map.tres`.
@@ -78,7 +78,7 @@ assets/characters/
 └── animations/humanoid/
     ├── source/*.blend                        ← animation đã chuẩn hoá, Godot import trực tiếp
     ├── clips/*.res                           ← clip Godot tách ra khi import
-    └── humanoid_rifle.tres                   ← AnimationLibrary (idle, walk 8 hướng, turn trái/phải)
+    └── locomotion.tres                      ← AnimationLibrary: idle, walk 8 hướng, sprint 8 hướng, turn trái/phải
 scenes/
 ├── characters/swat/
 │   ├── swat_model.tscn                       ← model SWAT + AnimationPlayer (kho animation)
@@ -96,14 +96,16 @@ scripts/
 └── tests/test_character_driver.gd            ← đọc WASD cho scene test cũ
 tools/blender/
 ├── make_in_place.py                          ← xoá chuyển động trôi của animation
-└── make_turn_in_place.py                     ← xoá phần xoay hông của animation xoay tại chỗ
+├── make_turn_in_place.py                     ← xoá phần xoay hông của animation xoay tại chỗ
+└── mixamo_batch_import.py                    ← import hàng loạt FBX Mixamo → .blend (bỏ prefix, In Place, đưa về tâm)
 ```
 
 ## Quy ước đặt tên
 
 | Loại | Quy ước | Ví dụ |
 |---|---|---|
-| File animation | `snake_case`: `<vũ khí>_<hành động>[_<hướng>]` | `rifle_idle`, `rifle_walk_forward` |
+| File animation (nguồn `.blend` và clip `.res`) | `snake_case`: `<hành động>[_<hướng>]`. Chân không phụ thuộc vũ khí nên **không** có tiền tố vũ khí | `idle`, `walk_forward`, `sprint_backward_left`, `turn_left` |
+| AnimationLibrary | Theo **mục đích**: `locomotion` (chân), sau này `rifle_upper`, `reactions`… | `locomotion/walk_forward` |
 | Material Godot | `M_<Nhân vật>_<Phần>` | `M_Swat_Body` |
 | Object armature trong Blender | `Skeleton_Reference` (nhân vật), `Armature` (animation) | |
 | Bone (trong Blender) | Tên Mixamo **không prefix** | `Hips`, `LeftArm`, `LeftUpLeg` |
@@ -307,7 +309,7 @@ Copy 6 texture vào `assets/characters/models/swat/source/textures/`. Dời file
 - **Frames per Second:** 30
 - **Keyframe Reduction:** none
 - **In Place:** ☑ nếu có. Nhiều animation (đi lùi, đi ngang cầm súng) **không có** ô này, khi đó dùng script ở 6.4.
-- Đổi tên file theo quy ước, ví dụ `rifle_walk_backward.fbx`.
+- Đổi tên file theo quy ước, ví dụ `walk_backward.fbx`.
 
 ### 6.2 Import vào Blender
 1. **File → New → General**, rồi **A → X**.
@@ -325,7 +327,15 @@ Copy 6 texture vào `assets/characters/models/swat/source/textures/`. Dời file
 ### 6.4 Đưa animation đi về "In Place" (nếu Mixamo không có ô In Place)
 Animation đi bộ của Mixamo mang theo chuyển động tiến: hông trôi khoảng **1.8 m mỗi vòng** rồi giật về. Trong game, **code** mới là thứ di chuyển nhân vật, nên animation phải bước tại chỗ.
 
-Script `tools/blender/make_in_place.py` đo độ trôi ngang của Hips từ frame đầu tới frame cuối, rồi trừ dần theo thời gian. Kết quả là xoá phần trôi nhưng **giữ nhún lên xuống và lắc người**.
+Script `tools/blender/make_in_place.py` làm 2 việc:
+1. **Xoá phần trôi:** đo độ trôi ngang của Hips từ frame đầu tới frame cuối, rồi trừ dần theo thời gian. Phần trôi bị xoá nhưng **nhún lên xuống và lắc người được giữ**.
+2. **Đưa hông về tâm:** dời vị trí ngang **trung bình** của Hips trong cả clip về đúng vị trí hông ở rest pose. Một số clip Mixamo (kể cả clip đã tải với In Place) bị **lệch sẵn khỏi gốc toạ độ** một khoảng cố định. Ví dụ 4 clip sprint thẳng lệch **1.84 m**, khiến model tách khỏi capsule va chạm khi chạy.
+
+Console in ra 2 dòng:
+```
+[In Place] mixamo.com: drift before = 1.843 m, after = 0.0000 m
+[In Place] mixamo.com: center offset before = 1.849 m, after = 0.0000 m
+```
 
 **Cách 1: trong Blender**
 1. Mở file `.blend` của animation đi (không áp dụng cho idle).
@@ -337,7 +347,7 @@ Script `tools/blender/make_in_place.py` đo độ trôi ngang của Hips từ fr
 ```powershell
 $blender = "C:\Program Files\Blender Foundation\Blender 5.3\blender.exe"
 foreach ($n in "forward","backward","left","right", "forward_left","backward_left","forward_right","backward_right") {
-  & $blender -b "assets\characters\animations\humanoid\source\rifle_walk_$n.blend" `
+  & $blender -b "assets\characters\animations\humanoid\source\walk_$n.blend" `
     --python "tools\blender\make_in_place.py" --python-expr "import bpy; bpy.ops.wm.save_mainfile()"
 }
 ```
@@ -347,6 +357,28 @@ Lưu ý:
 - Script **tự chuyển về Object Mode** trước khi chạy. Nếu file được lưu lúc armature đang ở Edit Mode, Blender không tính tư thế animation và mọi phép đo ra 0.
 - Độ trôi đo được cho biết tốc độ thật của animation: khoảng **1.8 m/s** với các clip walk hiện có. Dùng con số này cho `walk_speed`.
 - ⚠️ Trong Blender, luôn **Tab về Object Mode trước khi Ctrl+S**.
+
+### 6.4a Import hàng loạt nhiều clip (khuyên dùng khi có từ 2 clip trở lên)
+`tools/blender/mixamo_batch_import.py` gộp Bước 6.2–6.5 cho **cả một thư mục FBX** trong một lệnh. Với mỗi file `.fbx`:
+1. Import với Automatic Bone Orientation ☐, Ignore Leaf Bones ☐.
+2. Bỏ prefix tên bone (`mixamorig:Hips` → `Hips`). Track animation tự đổi theo.
+3. Đặt tên action `mixamo.com`, đặt khung thời gian scene bằng độ dài clip.
+4. Với `--in-place`: đo quãng đường trôi (ra **tốc độ m/s**), xoá phần trôi, đưa hông về tâm.
+5. Lưu ở **Object Mode** thành `<thư mục đích>/<tên file>.blend`.
+
+**Chuẩn bị:** đặt tên file FBX **đúng tên clip mong muốn** (ví dụ `sprint_forward.fbx`), gom vào một thư mục **ngoài project**.
+```powershell
+$blender = "C:\Program Files\Blender Foundation\Blender 5.3\blender.exe"
+& $blender -b --python "tools\blender\mixamo_batch_import.py" -- `
+  "C:\Users\User\Downloads\mixamo_sprint" `
+  "assets\characters\animations\humanoid\source" `
+  --in-place
+```
+Cuối cùng script in bảng: `clip | dài (s) | trôi (m) | tốc độ (m/s)`. Dòng nào có `⚠ còn N track có prefix` thì clip đó cần kiểm tra lại.
+
+**Đo tốc độ clip:**
+- Muốn script đo được tốc độ thì tải từ Mixamo với **In Place ☐ (tắt)**: tốc độ = quãng đường trôi ÷ thời lượng.
+- Nếu đã lỡ tải với In Place ☑ (độ trôi bằng 0), vẫn đo được bằng **bàn chân**: lúc chân chạm đất, nó trượt ngược về sau so với hông đúng bằng tốc độ di chuyển. Cách này đã kiểm chứng trên clip walk, cho kết quả 1.76–1.85 m/s, khớp với cách đo bằng độ trôi.
 
 ### 6.4b Animation xoay tại chỗ (Rifle Turn Left / Right)
 Clip Mixamo gốc vừa **bước chân** vừa **xoay hông** khoảng 80°. Trong game, code tự xoay thân nhân vật (Bước 15). Nếu giữ phần xoay trong clip, nhân vật sẽ xoay gấp đôi. Vì vậy cần **xoá phần xoay hông, giữ bước chân**.
@@ -360,15 +392,15 @@ Chạy **lần lượt 2 script** cho mỗi file turn. Thứ tự quan trọng: 
 ```powershell
 $blender = "C:\Program Files\Blender Foundation\Blender 5.3\blender.exe"
 foreach ($n in "left","right") {
-  $f = "assets\characters\animations\humanoid\source\rifle_turn_$n.blend"
+  $f = "assets\characters\animations\humanoid\source\turn_$n.blend"
   & $blender -b $f --python "tools\blender\make_turn_in_place.py" --python-expr "import bpy; bpy.ops.wm.save_mainfile()"
   & $blender -b $f --python "tools\blender\make_in_place.py"      --python-expr "import bpy; bpy.ops.wm.save_mainfile()"
 }
 ```
 Kết quả in ra console, **ghi lại góc xoay** để dùng ở Bước 15:
 ```
-[Turn In Place] ... hips turned +76.6 deg -> now max 0.00 deg     ← rifle_turn_left:  77°, 1.30 s
-[Turn In Place] ... hips turned -84.7 deg -> now max 0.00 deg     ← rifle_turn_right: 85°, 1.47 s
+[Turn In Place] ... hips turned +76.6 deg -> now max 0.00 deg     ← turn_left:  77°, 1.30 s
+[Turn In Place] ... hips turned -84.7 deg -> now max 0.00 deg     ← turn_right: 85°, 1.47 s
 ```
 Loop Mode của 2 clip turn để **Linear**. Khi cần xoay quá 90°, clip lặp lại để chân bước tiếp.
 
@@ -393,16 +425,26 @@ Lưu file `.blend` vào `assets/characters/animations/humanoid/source/<tên>.ble
 5. Nếu sau khi import lại thấy cảnh báo `ext_resource, invalid UID … using text path instead`: clip được tạo lại với UID mới nhưng library vẫn ghi UID cũ. Godot vẫn load đúng theo đường dẫn. Để hết cảnh báo, mở **Manage Animations** và bấm **💾** ở dòng library, hoặc chạy **Project → Tools → Upgrade Project Files…**.
 
 ### 7.2 AnimationLibrary
-1. Tạo **một lần**: chuột phải `animations/humanoid/` → **Create New → Resource → AnimationLibrary** → `humanoid_rifle.tres`.
+1. Tạo **một lần**: chuột phải `animations/humanoid/` → **Create New → Resource → AnimationLibrary** → `locomotion.tres`.
 2. Clip lưu dạng `.res` (nhị phân, nhẹ). Library lưu dạng `.tres`, vì chỉ chứa tham chiếu nên dễ xem diff trong git.
+3. **Chia library theo mục đích, không theo vũ khí.** `locomotion` chứa toàn bộ chuyển động chân (idle, walk, sprint, turn), dùng chung cho mọi vũ khí. Sau này, clip thân trên của từng vũ khí (bắn, nạp đạn) vào library riêng như `rifle_upper`, rồi trộn với chân bằng Blend2 có Filter. Nhờ vậy số clip là **cộng** chứ không **nhân** khi thêm vũ khí.
+
+### 7.2b Đổi tên library hoặc clip (khi refactor)
+Đổi tên phải sửa **đủ 4 chỗ**, nếu không AnimationTree sẽ không tìm thấy animation (nhân vật đứng im):
+1. **File** (`.tres`, `.res`): đổi trong **FileSystem của Godot** để giữ UID.
+2. **Tên gọi của library trong AnimationPlayer**: Manage Animations → double-click tên library → đổi. *Tên gọi này độc lập với tên file.*
+3. **Tên animation trong library**: Manage Animations → đổi từng tên.
+4. **Mọi node trong AnimationTree** trỏ tới tên cũ (các điểm BlendSpace, các state). Chọn từng node → Inspector → Animation.
+
+Kiểm tra: chọn `AnimationTree` → mỗi node phải hiện được animation. Nếu Inspector để trống ô Animation thì tên đó không còn tồn tại.
 
 ### 7.3 Scene model (kho animation)
 1. Chuột phải `swat.blend` → **New Inherited Scene** → lưu `scenes/characters/swat/swat_model.tscn`.
 2. Thêm **`AnimationPlayer` làm con trực tiếp của node gốc**, giữ Root Node = `..`.
    Node gốc là owner của `GeneralSkeleton`, nên `%GeneralSkeleton` mới tìm thấy được.
 3. Panel Animation → **Animation → Manage Animations**:
-   1. **Load Library** → `humanoid_rifle.tres`.
-   2. Icon **Load Animation** → chọn clip `.res` → đặt tên (`rifle_idle`…).
+   1. **Load Library** → `locomotion.tres`.
+   2. Icon **Load Animation** → chọn clip `.res` → đặt tên (`idle`, `walk_forward`…).
    3. ⚠️ Bấm **💾** ở dòng library để ghi vào file `.tres`.
 4. ⚠️ **Không bật Autoplay.** Khi đã có AnimationTree (Bước 8), AnimationPlayer chỉ là kho chứa animation. Nếu autoplay idle, nó sẽ ghi đè kết quả của AnimationTree mỗi frame. Muốn xem thử thì bấm ▶ rồi bấm Stop.
 5. ⚠️ Bấm **Stop trước khi Ctrl+S.** Nếu không, Godot lưu tư thế đang phát thành các dòng `bones/N/rotation` trong scene.
@@ -411,7 +453,7 @@ Lưu file `.blend` vào `assets/characters/animations/humanoid/source/<tên>.ble
 1. Tải từ Mixamo (6.1).
 2. Blender: import, bỏ prefix (6.2–6.3). Animation đi không có In Place thì chạy `make_in_place.py` (6.4). Animation xoay tại chỗ thì chạy `make_turn_in_place.py` rồi `make_in_place.py` (6.4b). Lưu vào `source/` ở **Object Mode** (6.5).
 3. Godot: Quick Load BoneMap, bật Unmapped Bones, đặt Loop, Save to File (7.1).
-4. Thêm clip vào `humanoid_rifle.tres` và nhớ bấm 💾 (7.3).
+4. Thêm clip vào `locomotion.tres` và nhớ bấm 💾 (7.3).
 5. Nếu là kiểu di chuyển mới, thêm điểm vào BlendSpace2D (8.6).
 
 ---
@@ -478,15 +520,15 @@ Chọn `AnimationTree`, panel **AnimationTree** mở ở dưới.
 
    | Toạ độ | Animation |
    |---|---|
-   | `(0, 0)` | `humanoid_rifle/rifle_idle` |
-   | `(0, 1)` | `humanoid_rifle/rifle_walk_forward` |
-   | `(0, -1)` | `humanoid_rifle/rifle_walk_backward` |
-   | `(-1, 0)` | `humanoid_rifle/rifle_walk_left` |
-   | `(1, 0)` | `humanoid_rifle/rifle_walk_right` |
-   | `(0.71, 0.71)` | `humanoid_rifle/rifle_walk_forward_right` |
-   | `(-0.71, 0.71)` | `humanoid_rifle/rifle_walk_forward_left` |
-   | `(-0.71, -0.71)` | `humanoid_rifle/rifle_walk_backward_left` |
-   | `(0.71, -0.71)` | `humanoid_rifle/rifle_walk_backward_right` |
+   | `(0, 0)` | `locomotion/idle` |
+   | `(0, 1)` | `locomotion/walk_forward` |
+   | `(0, -1)` | `locomotion/walk_backward` |
+   | `(-1, 0)` | `locomotion/walk_left` |
+   | `(1, 0)` | `locomotion/walk_right` |
+   | `(0.71, 0.71)` | `locomotion/walk_forward_right` |
+   | `(-0.71, 0.71)` | `locomotion/walk_forward_left` |
+   | `(-0.71, -0.71)` | `locomotion/walk_backward_left` |
+   | `(0.71, -0.71)` | `locomotion/walk_backward_right` |
 
    Quy ước: **X dương là sang phải** của nhân vật, **Y dương là phía trước**.
    - **Chỉ 1 điểm idle** ở `(0, 0)`. Nhiều điểm trùng vị trí làm Godot chia tam giác trộn bị lỗi.
@@ -719,11 +761,11 @@ F6 → dock Scene → tab **Remote** → chọn `Player/SwatCharacter` → đổ
 ## Bước 15: Animation xoay tại chỗ
 
 ### 15.1 Chuẩn bị clip
-Làm theo 6.4b: `make_turn_in_place.py` rồi `make_in_place.py` cho `rifle_turn_left` và `rifle_turn_right`. Ghi lại góc: **77°** (trái), **85°** (phải).
+Làm theo 6.4b: `make_turn_in_place.py` rồi `make_in_place.py` cho `turn_left` và `turn_right`. Ghi lại góc: **77°** (trái), **85°** (phải).
 
 ### 15.2 Thêm state vào State Machine
 Trong `swat_character.tscn` → `AnimationTree`:
-1. Chuột phải → **Add Animation** → `humanoid_rifle/rifle_turn_left`, đặt tên **`TurnLeft`**. Làm tương tự với `TurnRight`.
+1. Chuột phải → **Add Animation** → `locomotion/turn_left`, đặt tên **`TurnLeft`**. Làm tương tự với `TurnRight`.
 2. Click **một lần** vào từng node → Inspector:
 
    | Thuộc tính | `TurnLeft` | `TurnRight` |
@@ -784,6 +826,126 @@ Bàn chân trượt về phía trước thì **giảm** Timeline Length. Bước
 | Đang xoay thì bấm W | Về ngay `Locomotion`, đi bình thường |
 | Giữ W + D, nhìn lên | Phát đúng clip `walk_forward_right` (blend khoảng (0.71, 0.71)) |
 
+## Bước 16: Sprint 8 hướng (giữ Shift)
+
+**Thiết kế:** giữ Shift thì tốc độ tối đa tăng từ `walk_speed` lên `run_speed`, **vẫn ngắm theo chuột**. Luật xoay (vặn thân trên, xoay tại chỗ) giữ nguyên. Chân đổi sang clip sprint theo đúng hướng chạy so với hướng nhìn.
+
+```
+BlendSpace "Locomotion": 17 điểm, 2 vòng
+
+                     sprint_forward (0, 3.2)
+     sprint_fwd_left (-2.26, 2.26)   sprint_fwd_right (2.26, 2.26)
+                    walk: vòng bán kính 1 (8 điểm)
+ sprint_left (-3.2, 0) ──────── idle (0, 0) ──────── sprint_right (3.2, 0)
+     sprint_back_left (-2.26, -2.26) sprint_back_right (2.26, -2.26)
+                     sprint_backward (0, -3.2)
+```
+
+### 16.1 Clip
+1. Mixamo: 8 clip chạy cầm súng (forward, backward, left, right, 4 hướng chéo). Thiết lập như 6.1. Đặt tên `sprint_<hướng>.fbx`.
+2. Chạy `mixamo_batch_import.py` với `--in-place` (6.4a). Lưu vào `source/sprint_<hướng>.blend`.
+3. Kiểm tra **hông nằm đúng tâm**: 4 clip thẳng ban đầu lệch 1.84 m, đã sửa bằng bước "đưa hông về tâm" của `make_in_place.py` (6.4).
+4. Import trong Godot như 7.1: **Loop Mode Linear cho cả 8 clip**, Save to File `clips/sprint_<hướng>.res`. Thêm vào library `locomotion`.
+
+### 16.2 Tốc độ đo được (bằng bàn chân)
+| Clip | m/s | | Clip | m/s |
+|---|---|---|---|---|
+| `sprint_forward` | 6.24 | | `sprint_forward_left` | 5.69 |
+| `sprint_backward` | 6.06 | | `sprint_forward_right` | 5.86 |
+| `sprint_left` | 6.11 | | `sprint_backward_left` | 5.44 |
+| `sprint_right` | 6.37 | | `sprint_backward_right` | 5.06 |
+
+Chọn **`run_speed = 5.8 m/s`** (trung bình, nghiêng về các hướng chéo vốn chậm hơn).
+
+### 16.3 Input Map
+**Project Settings → Input Map:** thêm action **`run`** → phím **Shift** → **Device: All Devices**.
+
+### 16.4 BlendSpace
+Chọn `AnimationTree` → click **một lần** vào node `Locomotion` → Inspector:
+- **Min Space** `(-3.5, -3.5)`, **Max Space** `(3.5, 3.5)`. Khung mặc định ±1 không chứa được điểm sprint.
+- **Snap** `(0.01, 0.01)`, để gõ được 2.26.
+
+Thêm 8 điểm trên **vòng bán kính R = run_speed ÷ walk_speed = 5.8 ÷ 1.8 ≈ 3.2**, điểm chéo ở `R × 0.707 ≈ 2.26`:
+
+| Toạ độ | Animation | | Toạ độ | Animation |
+|---|---|---|---|---|
+| `(0, 3.2)` | `locomotion/sprint_forward` | | `(2.26, 2.26)` | `locomotion/sprint_forward_right` |
+| `(0, -3.2)` | `locomotion/sprint_backward` | | `(-2.26, 2.26)` | `locomotion/sprint_forward_left` |
+| `(-3.2, 0)` | `locomotion/sprint_left` | | `(-2.26, -2.26)` | `locomotion/sprint_backward_left` |
+| `(3.2, 0)` | `locomotion/sprint_right` | | `(2.26, -2.26)` | `locomotion/sprint_backward_right` |
+
+### 16.5 Code
+**`humanoid_character.gd`:**
+```gdscript
+@export var run_speed := 5.8         ## m/s, khớp tốc độ của animation sprint (giữ Shift)
+var is_running := false              ## controller gán, giống move_input / aim_direction
+
+# _apply_movement
+	var max_speed := run_speed if is_running else walk_speed
+	var target := Vector3(move_input.x, 0.0, move_input.z).limit_length(1.0) * max_speed
+
+# _update_animation: cho chấm blend ra tới vòng sprint
+	_blend = _blend.lerp(target.limit_length(run_speed / walk_speed), clampf(blend_smoothing * delta, 0.0, 1.0))
+```
+**`player_controller.gd`:**
+```gdscript
+	character.is_running = Input.is_action_pressed("run")
+```
+- Toạ độ blend vẫn là `vận tốc ÷ walk_speed`. Đi bộ ra vòng trong (1), chạy hết tốc độ ra vòng ngoài (3.2). Lúc đang tăng tốc, chấm nằm giữa 2 vòng và Godot trộn walk với sprint theo tỉ lệ.
+- Nếu giữ `limit_length(1.0)` như cũ, chấm blend không bao giờ ra tới vòng sprint, và nhân vật chạy 5.8 m/s nhưng phát animation đi bộ (chân trượt rất nặng).
+
+### 16.6 Tinh chỉnh
+Đổi `run_speed` thì **phải đổi bán kính vòng sprint**: `R = run_speed ÷ walk_speed`, điểm chéo `= R × 0.707`.
+
+| Muốn | `run_speed` | Điểm thẳng | Điểm chéo |
+|---|---|---|---|
+| Chạy nước rút (mặc định) | 5.8 | 3.2 | 2.26 |
+| Chạy vừa phải | 4.5 | 2.5 | 1.77 |
+
+Clip sprint được quay ở khoảng 6 m/s. Giảm `run_speed` nhiều thì bước chân sẽ trượt. Nếu muốn chạy chậm hơn, nên dùng clip "Rifle Run" (chạy thường) thay cho clip sprint.
+
+### 16.7 Kiểm tra
+| Thao tác | Kết quả mong đợi |
+|---|---|
+| Shift + W | Tăng tốc khoảng 0.3 s lên 5.8 m/s, blend (0, 3.2), phát `sprint_forward` |
+| Shift + W + D | blend khoảng (2.28, 2.28), phát `sprint_forward_right` |
+| Shift + W, chuột bên phải | Thân xoay −90°, blend (−3.2, 0), phát **`sprint_left`** |
+| Shift + S, chuột phía trên | blend (0, −3.2), phát `sprint_backward` |
+| Thả Shift | Giảm về 1.8 m/s, về clip walk |
+| Giữ Shift khi đứng yên | Không đổi gì, vẫn idle và xoay tại chỗ |
+
+## Bước 17: Camera mượt trên màn hình tần số cao (Physics Interpolation)
+
+**Triệu chứng:** khi sprint, nhân vật bị **nhoè, rung, như có bóng mờ**.
+
+**Nguyên nhân:** màn hình 144 Hz vẽ 144 frame/giây, nhưng nhân vật chỉ di chuyển trong `_physics_process` (**60 lần/giây**), còn camera di chuyển trong `_process` (**144 lần/giây**). Khoảng 2/3 số frame, camera trượt đi trong khi nhân vật đứng yên, rồi frame sau nhân vật nhảy bù lên. Chạy càng nhanh càng rõ: sprint 5.8 m/s thì mỗi lần nhảy gần 10 cm.
+
+### 17.1 Bật nội suy vật lý
+**Project Settings → General → bật Advanced Settings → Physics → Common → Physics Interpolation ☑.**
+Vật lý vẫn tính 60 lần/giây, nhưng khi vẽ, Godot nội suy vị trí của các node di chuyển trong `_physics_process` (như `CharacterBody3D`) giữa 2 bước. Nhân vật mượt ở mọi tần số màn hình.
+
+### 17.2 Sửa `top_down_camera.gd`
+```gdscript
+@export var follow_speed := 10.0      ## viết 10.0 (float), viết 10 thì Inspector chỉ cho nhập số nguyên
+
+func _ready() -> void:
+	# Rig tự di chuyển trong _process nên tắt nội suy cho nó (Camera3D con tắt theo, chế độ Inherit)
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+	...
+
+func _process(delta: float) -> void:
+	# Bám theo vị trí ĐANG ĐƯỢC VẼ (đã nội suy), không phải vị trí vật lý nhảy 60 lần/giây
+	var target_pos := target.get_global_transform_interpolated().origin
+	var weight := 1.0 - exp(-follow_speed * delta)
+	global_position = global_position.lerp(target_pos, weight)
+```
+- `get_global_transform_interpolated()`: vị trí đã nội suy, đúng vị trí nhân vật đang hiện trên màn hình.
+- Node nào tự di chuyển trong `_process` (camera, UI 3D…) thì phải **tắt** nội suy cho node đó. Nếu không, nó bị trễ thêm 1 bước vật lý và rung theo kiểu khác.
+
+### 17.3 Lưu ý
+- **Khi sprint, nhân vật lệch về phía hướng chạy** khoảng `tốc độ ÷ follow_speed` (5.8 ÷ 10 ≈ 0.6 m). Đây là độ trễ có chủ ý của camera. Muốn bám sát hơn thì tăng `follow_speed` lên 15–20.
+- AnimationTree đang để **Callback Mode = Physics**, nên tư thế xương cập nhật 60 lần/giây. Nếu thấy tay chân hơi giật ở màn 144 Hz, đổi sang **Idle**.
+
 ---
 
 ## Git và LFS
@@ -836,6 +998,10 @@ Blender tạo file `.blend1` mỗi lần lưu đè. Quy tắc LFS `*.blend` khô
 | Animation turn làm nhân vật xoay gấp đôi | Clip còn phần xoay hông | Chạy `make_turn_in_place.py` (6.4b) |
 | Cảnh báo `ext_resource, invalid UID … using text path instead` | Clip được tạo lại với UID mới, library còn UID cũ | Bấm 💾 ở Manage Animations, hoặc Project → Tools → Upgrade Project Files (7.1) |
 | Có file `*.tscn12345678.tmp` cạnh scene | Godot lưu dở | Xoá file `.tmp` |
+| Khi chạy, model tách khỏi capsule va chạm khoảng 1–2 m | Clip bị **lệch sẵn khỏi gốc toạ độ** dù không trôi (gặp ở clip sprint thẳng) | Chạy `make_in_place.py` để đưa hông về tâm (6.4) |
+| Script batch báo độ trôi 0 m nên không biết tốc độ clip | Tải từ Mixamo với In Place ☑ | Tải lại với In Place ☐, hoặc đo bằng bàn chân (6.4a) |
+| Sau khi đổi tên library/clip, nhân vật đứng im | Tên gọi library trong AnimationPlayer hoặc các node AnimationTree còn tên cũ | Sửa đủ 4 chỗ (7.2b) |
+| Đổi tên clip xong, clone sang máy khác lại xuất hiện clip tên cũ | `save_to_file/fallback_path` trong file `.import` vẫn là tên cũ | Mở Advanced Import của file nguồn, chọn lại Save to File path, Reimport |
 
 ### AnimationTree và nhân vật
 | Triệu chứng | Nguyên nhân | Cách sửa |
@@ -869,6 +1035,12 @@ Blender tạo file `.blend1` mỗi lần lưu đè. Quy tắc LFS `*.blend` khô
 | State machine tự nhảy sang TurnLeft dù nhân vật không xoay | Mũi tên `Locomotion → TurnLeft` đặt Advance Mode = Auto | Đặt **Enabled**, để code gọi `travel()` (15.2) |
 | Bàn chân trượt khi xoay tại chỗ | Timeline Length không khớp `idle_turn_speed` | `Timeline Length = góc clip ÷ idle_turn_speed` (15.4) |
 | Đo tư thế bằng code không thấy phần xoay thân trên | Đọc tư thế ngoài thời điểm modifier chạy | Đọc trong tín hiệu `skeleton_updated` (13.4) |
+| Giữ Shift chạy nhanh nhưng phát animation đi bộ, chân trượt | Blend vẫn `limit_length(1.0)`, chấm không ra tới vòng sprint | `limit_length(run_speed / walk_speed)` (16.5) |
+| Không thêm được điểm sprint ở (0, 3.2) | Khung BlendSpace mặc định ±1 | Min/Max Space ±3.5 (16.4) |
+| Chạy nhanh bị chân trượt | Bán kính vòng sprint không khớp `run_speed` | `R = run_speed ÷ walk_speed` (16.6) |
+| Clip sprint khựng sau một nhịp | Loop Mode = None | Advanced Import → Loop Mode Linear |
+| Khi sprint, nhân vật nhoè, rung, như có bóng mờ | Màn hình tần số cao (144 Hz) trong khi nhân vật di chuyển 60 lần/giây | Bật Physics Interpolation, camera dùng `get_global_transform_interpolated()` (Bước 17) |
+| `follow_speed` trong Inspector chỉ nhập được số nguyên | Khai báo `:= 10` nên kiểu là `int` | Viết `:= 10.0` |
 
 ---
 
@@ -877,11 +1049,11 @@ Blender tạo file `.blend1` mỗi lần lưu đè. Quy tắc LFS `*.blend` khô
 | Giai đoạn | Nội dung | Trạng thái |
 |---|---|---|
 | 0 | Chuẩn bị asset: skeleton, SWAT, material, BoneMap | ✅ |
-| 1 | Pipeline animation: idle, walk 8 hướng, turn trái/phải, In Place, 1 BoneMap, script Blender | ✅ |
+| 1 | Pipeline animation: idle, walk 8 hướng, sprint 8 hướng, turn trái/phải, In Place + đưa về tâm, 1 BoneMap, library `locomotion`, script Blender (batch import) | ✅ |
 | 2 | Scene nhân vật: `swat_character.tscn`, AnimationTree (BlendSpace2D), `humanoid_character.gd`, scene test | ✅ |
-| 3 | Điều khiển người chơi: ngắm theo chuột, camera đi theo, WASD theo camera, xoay thân trên (`SpineTwistModifier`), xoay tại chỗ (TurnLeft/TurnRight) | ✅ |
+| 3 | Điều khiển người chơi: ngắm theo chuột, camera đi theo, WASD theo camera, xoay thân trên (`SpineTwistModifier`), xoay tại chỗ (TurnLeft/TurnRight), sprint 8 hướng (Shift), camera mượt (Physics Interpolation) | ✅ |
 | 4 | Vũ khí: model súng (SCAR-L đã kiểm tra, cần chuẩn hoá), gắn vào tay (`BoneAttachment3D`), `WeaponData`, bắn hitscan, nạp đạn, hiệu ứng | ⏸ Tạm hoãn |
 | 5 | Chiến đấu: máu, hitbox/hurtbox, animation thân trên (bắn, nạp đạn, trúng đạn, chết) | ⬜ |
 | 6 | Kẻ địch: Navigation, AI (dùng lại `HumanoidCharacter`, chỉ thay controller) | ⬜ |
 | 7 | Vòng lặp game: wave, HUD, menu | ⬜ |
-| 8 | Hoàn thiện: chạy nhanh (sprint), foot IK, SFX, VFX, tối ưu | ⬜ |
+| 8 | Hoàn thiện: camera nhìn trước (look-ahead), foot IK, SFX, VFX, tối ưu | ⬜ |
