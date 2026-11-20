@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://288udy25p71d"
-path="res://.godot/imported/turn_right.blend-c6897cefc8e365f81669844c2c684d50.scn"
+path="res://.godot/imported/turn_right.blend-063770f0747a0274a8e5a559c9c44a49.scn"
 
 [deps]
 
-source_file="res://assets/characters/animations/humanoid/source/turn_right.blend"
-dest_files=["res://.godot/imported/turn_right.blend-c6897cefc8e365f81669844c2c684d50.scn"]
+source_file="res://assets/characters/animations/humanoid/source/locomotion/turn/turn_right.blend"
+dest_files=["res://.godot/imported/turn_right.blend-063770f0747a0274a8e5a559c9c44a49.scn"]
 
 [params]
 
