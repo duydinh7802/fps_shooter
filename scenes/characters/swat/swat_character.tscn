@@ -1,4 +1,4 @@
-[gd_scene load_steps=35 format=3 uid="uid://b74s6ucl1yvmc"]
+[gd_scene load_steps=58 format=3 uid="uid://b74s6ucl1yvmc"]
 
 [ext_resource type="Script" uid="uid://dteu2j5j672qn" path="res://scripts/characters/humanoid_character.gd" id="1_cgn6f"]
 [ext_resource type="PackedScene" uid="uid://cgcipwp6uwnjk" path="res://scenes/characters/swat/swat_model.tscn" id="1_rl4ey"]
@@ -6,6 +6,10 @@
 [ext_resource type="Curve" path="res://assets/characters/animations/humanoid/turn_curves/turn_right_90_yaw.tres" id="3_qtpdt"]
 [ext_resource type="Curve" path="res://assets/characters/animations/humanoid/turn_curves/turn_left_90_yaw.tres" id="4_fj0r2"]
 [ext_resource type="Curve" path="res://assets/characters/animations/humanoid/turn_curves/turn_left_180_yaw.tres" id="5_u5g5n"]
+[ext_resource type="Curve" path="res://assets/characters/animations/humanoid/turn_curves/crouch_turn_left_90_yaw.tres" id="c_left_90"]
+[ext_resource type="Curve" path="res://assets/characters/animations/humanoid/turn_curves/crouch_turn_left_180_yaw.tres" id="c_left_180"]
+[ext_resource type="Curve" path="res://assets/characters/animations/humanoid/turn_curves/crouch_turn_right_90_yaw.tres" id="c_right_90"]
+[ext_resource type="Curve" path="res://assets/characters/animations/humanoid/turn_curves/crouch_turn_right_180_yaw.tres" id="c_right_180"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_ow5n7"]
 radius = 0.3
@@ -138,19 +142,113 @@ xfade_time = 0.15
 [sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_sxga5"]
 xfade_time = 0.2
 
+[sub_resource type="AnimationNodeAnimation" id="Crouch_walk_forward"]
+animation = &"crouch/walk_forward"
+
+[sub_resource type="AnimationNodeAnimation" id="Crouch_walk_backward"]
+animation = &"crouch/walk_backward"
+
+[sub_resource type="AnimationNodeAnimation" id="Crouch_walk_left"]
+animation = &"crouch/walk_left"
+
+[sub_resource type="AnimationNodeAnimation" id="Crouch_walk_right"]
+animation = &"crouch/walk_right"
+
+[sub_resource type="AnimationNodeAnimation" id="Crouch_walk_forward_left"]
+animation = &"crouch/walk_forward_left"
+
+[sub_resource type="AnimationNodeAnimation" id="Crouch_walk_forward_right"]
+animation = &"crouch/walk_forward_right"
+
+[sub_resource type="AnimationNodeAnimation" id="Crouch_walk_backward_left"]
+animation = &"crouch/walk_backward_left"
+
+[sub_resource type="AnimationNodeAnimation" id="Crouch_walk_backward_right"]
+animation = &"crouch/walk_backward_right"
+
+[sub_resource type="AnimationNodeAnimation" id="Crouch_idle"]
+animation = &"crouch/idle"
+
+[sub_resource type="AnimationNodeBlendSpace2D" id="Crouch_space"]
+blend_point_0/node = SubResource("Crouch_walk_forward")
+blend_point_0/pos = Vector2(0, 1)
+blend_point_1/node = SubResource("Crouch_walk_backward")
+blend_point_1/pos = Vector2(0, -1)
+blend_point_2/node = SubResource("Crouch_walk_left")
+blend_point_2/pos = Vector2(-1, 0)
+blend_point_3/node = SubResource("Crouch_walk_right")
+blend_point_3/pos = Vector2(1, 0)
+blend_point_4/node = SubResource("Crouch_walk_forward_left")
+blend_point_4/pos = Vector2(-0.71, 0.71)
+blend_point_5/node = SubResource("Crouch_walk_forward_right")
+blend_point_5/pos = Vector2(0.71, 0.71)
+blend_point_6/node = SubResource("Crouch_walk_backward_left")
+blend_point_6/pos = Vector2(-0.71, -0.71)
+blend_point_7/node = SubResource("Crouch_walk_backward_right")
+blend_point_7/pos = Vector2(0.71, -0.71)
+blend_point_8/node = SubResource("Crouch_idle")
+blend_point_8/pos = Vector2(0, 0)
+min_space = Vector2(-1.1, -1.1)
+max_space = Vector2(1.1, 1.1)
+x_label = "right"
+y_label = "forward"
+sync = true
+
+[sub_resource type="AnimationNodeAnimation" id="Crouch_turn_left_180"]
+animation = &"crouch/turn_left_180"
+
+[sub_resource type="AnimationNodeAnimation" id="Crouch_turn_left_90"]
+animation = &"crouch/turn_left_90"
+
+[sub_resource type="AnimationNodeAnimation" id="Crouch_turn_right_90"]
+animation = &"crouch/turn_right_90"
+
+[sub_resource type="AnimationNodeAnimation" id="Crouch_turn_right_180"]
+animation = &"crouch/turn_right_180"
+
+[sub_resource type="AnimationNodeBlendSpace1D" id="CrouchTurn_space"]
+blend_point_0/node = SubResource("Crouch_turn_left_180")
+blend_point_0/pos = 185.3
+blend_point_1/node = SubResource("Crouch_turn_left_90")
+blend_point_1/pos = 90.4
+blend_point_2/node = SubResource("Crouch_turn_right_90")
+blend_point_2/pos = -83.8
+blend_point_3/node = SubResource("Crouch_turn_right_180")
+blend_point_3/pos = -179.4
+min_space = -190.0
+max_space = 190.0
+blend_mode = 1
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="T_loco_crouch"]
+xfade_time = 0.3
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="T_crouch_loco"]
+xfade_time = 0.3
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="T_crouch_turn"]
+xfade_time = 0.15
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="T_turn_crouch"]
+xfade_time = 0.2
+
 [sub_resource type="AnimationNodeStateMachine" id="AnimationNodeStateMachine_rl4ey"]
+states/Crouch/node = SubResource("Crouch_space")
+states/Crouch/position = Vector2(118, 225)
+states/CrouchTurn/node = SubResource("CrouchTurn_space")
+states/CrouchTurn/position = Vector2(118, 134)
 states/Locomotion/node = SubResource("AnimationNodeBlendSpace2D_rl4ey")
 states/Locomotion/position = Vector2(-138, 225)
 states/Start/position = Vector2(-313, 231)
 states/TurnInPlace/node = SubResource("AnimationNodeBlendSpace1D_51vfp")
 states/TurnInPlace/position = Vector2(-138, 134.22824)
-transitions = ["Start", "Locomotion", SubResource("AnimationNodeStateMachineTransition_cgn6f"), "Locomotion", "TurnInPlace", SubResource("AnimationNodeStateMachineTransition_mlsfa"), "TurnInPlace", "Locomotion", SubResource("AnimationNodeStateMachineTransition_sxga5")]
+transitions = ["Start", "Locomotion", SubResource("AnimationNodeStateMachineTransition_cgn6f"), "Locomotion", "TurnInPlace", SubResource("AnimationNodeStateMachineTransition_mlsfa"), "TurnInPlace", "Locomotion", SubResource("AnimationNodeStateMachineTransition_sxga5"), "Locomotion", "Crouch", SubResource("T_loco_crouch"), "Crouch", "Locomotion", SubResource("T_crouch_loco"), "Crouch", "CrouchTurn", SubResource("T_crouch_turn"), "CrouchTurn", "Crouch", SubResource("T_turn_crouch")]
 graph_offset = Vector2(-547.6453, 102.22825)
 
 [node name="SwatCharacter" type="CharacterBody3D"]
 script = ExtResource("1_cgn6f")
 max_twist_angle = 45.0
 turn_curves = Array[Curve]([ExtResource("4_fj0r2"), ExtResource("5_u5g5n"), ExtResource("3_qtpdt"), ExtResource("2_86jxv")])
+crouch_turn_curves = Array[Curve]([ExtResource("c_left_90"), ExtResource("c_left_180"), ExtResource("c_right_90"), ExtResource("c_right_180")])
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.875, 0)
@@ -158,6 +256,8 @@ shape = SubResource("CapsuleShape3D_ow5n7")
 
 [node name="Model" parent="." instance=ExtResource("1_rl4ey")]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
+
+[node name="TurnYaw" type="Node3D" parent="Model"]
 
 [node name="AnimationTree" type="AnimationTree" parent="."]
 root_node = NodePath("../Model")

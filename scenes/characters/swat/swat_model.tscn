@@ -1,11 +1,13 @@
-[gd_scene load_steps=3 format=3 uid="uid://cgcipwp6uwnjk"]
+[gd_scene load_steps=4 format=3 uid="uid://cgcipwp6uwnjk"]
 
 [ext_resource type="PackedScene" uid="uid://bsnhi3f37d4t7" path="res://assets/characters/models/swat/blender/swat.blend" id="1_7oucm"]
 [ext_resource type="AnimationLibrary" uid="uid://bws6jp3cl8x7j" path="res://assets/characters/animations/humanoid/locomotion.tres" id="2_3frsv"]
+[ext_resource type="AnimationLibrary" path="res://assets/characters/animations/humanoid/crouch.tres" id="3_crouch"]
 
 [node name="swat" instance=ExtResource("1_7oucm")]
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="." index="1"]
 libraries = {
+&"crouch": ExtResource("3_crouch"),
 &"locomotion": ExtResource("2_3frsv")
 }

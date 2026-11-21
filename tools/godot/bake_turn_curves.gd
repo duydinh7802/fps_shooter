@@ -9,7 +9,10 @@ extends EditorScript
 ##
 ## Cách chạy: mở file này trong Script Editor → menu File → Run (Ctrl+Shift+X).
 
-const SOURCE_DIR := "res://assets/characters/animations/humanoid/source/locomotion/turn/"
+const SOURCE_DIRS: Array[String] = [   ## các thư mục chứa file turn đã có Empty TurnYaw
+	"res://assets/characters/animations/humanoid/source/locomotion/turn/",
+	"res://assets/characters/animations/humanoid/source/crouch/turn/",
+]
 const OUTPUT_DIR := "res://assets/characters/animations/humanoid/turn_curves/"
 const YAW_NODE := "TurnYaw"  ## tên Empty trong Blender = tên node/track trong Godot
 const SAMPLE_FPS := 30.0     ## Mixamo 30 frame/giây → mỗi frame một điểm
@@ -18,17 +21,18 @@ const EXTENSION := "tres"    ## "tres" = văn bản (đọc được, diff đư�
 
 func _run() -> void:
 	DirAccess.make_dir_recursive_absolute(OUTPUT_DIR)
-	for file in DirAccess.get_files_at(SOURCE_DIR):
-		if file.get_extension() not in ["blend", "glb", "gltf", "fbx"]:
-			continue
-		var curve := bake(SOURCE_DIR + file)
-		if curve == null:
-			continue
-		var out := OUTPUT_DIR + file.get_basename() + "_yaw." + EXTENSION
-		var err := ResourceSaver.save(curve, out)
-		print("[Bake Turn] %-22s %+7.1f°  %.3f s  %d điểm  → %s %s" % [
-			file, curve.sample(curve.max_domain), curve.max_domain, curve.point_count, out,
-			"" if err == OK else "LỖI %d" % err])
+	for dir in SOURCE_DIRS:
+		for file in DirAccess.get_files_at(dir):
+			if file.get_extension() not in ["blend", "glb", "gltf", "fbx"]:
+				continue
+			var curve := bake(dir + file)
+			if curve == null:
+				continue
+			var out := OUTPUT_DIR + file.get_basename() + "_yaw." + EXTENSION
+			var err := ResourceSaver.save(curve, out)
+			print("[Bake Turn] %-24s %+7.1f°  %.3f s  %d điểm  → %s %s" % [
+				file, curve.sample(curve.max_domain), curve.max_domain, curve.point_count, out,
+				"" if err == OK else "LỖI %d" % err])
 	EditorInterface.get_resource_filesystem().scan()   # cho dock FileSystem thấy file mới
 
 

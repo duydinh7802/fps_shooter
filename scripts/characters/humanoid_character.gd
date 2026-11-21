@@ -6,6 +6,7 @@ extends CharacterBody3D
 @export_group("Movement")
 @export var walk_speed := 1.8        ## m/s, khớp tốc độ của animation walk Mixamo
 @export var run_speed := 5.8         ## m/s, khớp tốc độ của animation sprint (giữ Shift)
+@export var crouch_speed := 1.95     ## m/s, khớp tốc độ clip crouch_walk (đo được 1.96)
 @export var acceleration := 12.0     ## m/s² khi tăng tốc hoặc giảm tốc
 @export var blend_smoothing := 10.0  ## độ mượt khi chuyển blend_position
 
@@ -16,6 +17,9 @@ extends CharacterBody3D
 ## Góc cuối của mỗi curve = toạ độ điểm của clip đó trong BlendSpace1D TurnInPlace.
 ## (Muốn dùng file _yaw.res kiểu Animation thì đổi qua _yaw_to_curve() — xem hàm đó.)
 @export var turn_curves: Array[Curve] = []
+## Như turn_curves nhưng cho clip xoay khi ngồi (turn_curves/crouch_turn_*_yaw.tres),
+## góc cuối = toạ độ điểm trong BlendSpace1D CrouchTurn.
+@export var crouch_turn_curves: Array[Curve] = []
 @export var moving_turn_speed := 12.0 ## tốc độ thân bám theo hướng ngắm khi đang đi
 @export var moving_threshold := 0.2   ## m/s. Nhanh hơn mức này coi là "đang đi"
 @export var twist_smoothing := 15.0   ## độ mượt khi thân trên xoay theo hướng ngắm
@@ -29,6 +33,8 @@ var move_input := Vector3.ZERO
 var aim_direction := Vector3.FORWARD
 ## true khi đang giữ nút chạy (controller gán)
 var is_running := false
+## true khi đang ngồi (controller bật/tắt)
+var is_crouching := false
 
 ## Góc ngắm (radian), tính từ aim_direction
 var aim_yaw := 0.0
@@ -40,6 +46,8 @@ var is_turning := false
 const BLEND_PATH := &"parameters/Locomotion/blend_position"
 const PLAYBACK_PATH := &"parameters/playback"
 const TURN_BLEND_PATH := &"parameters/TurnInPlace/blend_position"
+const CROUCH_BLEND_PATH := &"parameters/Crouch/blend_position"
+const CROUCH_TURN_BLEND_PATH := &"parameters/CrouchTurn/blend_position"
 const YAW_TRACK := ^"TurnYaw"     ## tên Empty trong Blender = tên track trong animation _yaw.res
 const YAW_SAMPLE_FPS := 30.0      ## Mixamo 30 frame/giây
 
@@ -58,6 +66,7 @@ var _turn_curves: Array[Curve] = []  ## các curve dùng để chọn clip (lấ
 var _turn_curve: Curve        ## curve của clip đang xoay
 var _turn_time := 0.0         ## đã xoay được bao lâu (giây)
 var _turn_start_yaw := 0.0    ## góc thân lúc bắt đầu xoay (radian)
+var _turn_state := &"TurnInPlace"  ## state đang phát clip xoay: TurnInPlace (đứng) hoặc CrouchTurn (ngồi)
 
 
 func _ready() -> void:
@@ -68,6 +77,8 @@ func _ready() -> void:
 	_turn_curves.assign(turn_curves)
 	if _turn_curves.is_empty():
 		push_warning("%s: chưa gán Turn Curves → đứng yên sẽ không xoay chân, chỉ vặn thân trên" % name)
+	if crouch_turn_curves.is_empty():
+		push_warning("%s: chưa gán Crouch Turn Curves → ngồi yên sẽ không xoay chân" % name)
 	if show_debug:
 		_create_debug()
 
@@ -82,7 +93,11 @@ func _physics_process(delta: float) -> void:
 
 
 func _apply_movement(delta: float) -> void:
-	var max_speed := run_speed if is_running else walk_speed
+	var max_speed := walk_speed
+	if is_crouching:
+		max_speed = crouch_speed
+	elif is_running:
+		max_speed = run_speed
 	var target := Vector3(move_input.x, 0.0, move_input.z).limit_length(1.0) * max_speed
 	var horizontal := Vector3(velocity.x, 0.0, velocity.z).move_toward(target, acceleration * delta)
 	velocity.x = horizontal.x
@@ -161,11 +176,12 @@ func _yaw_to_curve(res: Resource) -> Curve:
 
 
 ## Chọn clip có góc xoay gần góc lệch nhất (cùng chiều), chốt lại và bắt đầu xoay.
+## Đang ngồi → chọn trong crouch_turn_curves và phát ở state CrouchTurn.
 func _start_turn(diff: float) -> void:
 	var wanted := rad_to_deg(diff)
 	var best: Curve = null
 	var best_angle := 0.0
-	for curve in _turn_curves:
+	for curve in (crouch_turn_curves if is_crouching else _turn_curves):
 		var angle := curve.sample(curve.max_domain)   # góc cuối = tổng góc Spine xoay trong clip
 		if signf(angle) != signf(wanted):
 			continue
@@ -178,13 +194,19 @@ func _start_turn(diff: float) -> void:
 	_turn_time = 0.0
 	_turn_start_yaw = rotation.y
 	is_turning = true
+	# Chốt state lúc bắt đầu: bấm ngồi/đứng giữa chừng thì clip xoay vẫn chạy hết
+	_turn_state = &"CrouchTurn" if is_crouching else &"TurnInPlace"
 	# BlendSpace1D ở chế độ Discrete: đặt đúng toạ độ điểm → phát đúng clip đó
-	anim_tree.set(TURN_BLEND_PATH, best_angle)
+	anim_tree.set(CROUCH_TURN_BLEND_PATH if is_crouching else TURN_BLEND_PATH, best_angle)
 
 
 func _update_state_machine() -> void:
-	# Đang xoay tại chỗ → TurnInPlace (clip do _start_turn chọn), còn lại → Locomotion
-	var wanted := &"TurnInPlace" if is_turning else &"Locomotion"
+	# Đang xoay tại chỗ → state xoay (clip do _start_turn chọn), còn lại → Crouch / Locomotion
+	var wanted := &"Locomotion"
+	if is_turning:
+		wanted = _turn_state
+	elif is_crouching:
+		wanted = &"Crouch"
 	if wanted != _anim_state:
 		_anim_state = wanted
 		_playback.travel(wanted)
@@ -193,9 +215,11 @@ func _update_state_machine() -> void:
 func _update_animation(delta: float) -> void:
 	# Đổi vận tốc sang hệ toạ độ của thân: x = sang phải, −z = phía trước
 	var local := global_basis.inverse() * Vector3(velocity.x, 0.0, velocity.z)
-	var target := Vector2(local.x, -local.z) / walk_speed
+	# Chia cho tốc độ clip đi của tư thế hiện tại → điểm walk luôn nằm ở bán kính 1
+	var target := Vector2(local.x, -local.z) / (crouch_speed if is_crouching else walk_speed)
 	_blend = _blend.lerp(target.limit_length(run_speed / walk_speed), clampf(blend_smoothing * delta, 0.0, 1.0))
 	anim_tree.set(BLEND_PATH, _blend)
+	anim_tree.set(CROUCH_BLEND_PATH, _blend.limit_length(1.0))   # Crouch không có vòng sprint
 
 
 func _update_spine_twist(delta: float) -> void:

@@ -14,6 +14,10 @@ func _physics_process(_delta: float) -> void:
 		return
 	character.move_input = _get_move_input()
 	character.is_running = Input.is_action_pressed("run")
+	if Input.is_action_just_pressed("crouch"):
+		character.is_crouching = not character.is_crouching   # C = bật/tắt ngồi
+	if character.is_running:
+		character.is_crouching = false                        # giữ Shift = đứng dậy chạy luôn
 	var aim_point = _get_aim_point()
 	if aim_point != null:
 		var to_aim: Vector3 = aim_point - character.global_position

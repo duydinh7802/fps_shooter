@@ -76,9 +76,10 @@ assets/characters/
 │   ├── source/textures/*.png                 ← texture diffuse / normal / specular
 │   └── materials/M_Swat_Body.tres, M_Swat_Head.tres
 └── animations/humanoid/
-    ├── source/*.blend                        ← animation đã chuẩn hoá, Godot import trực tiếp
-    ├── clips/*.res                           ← clip Godot tách ra khi import
-    └── locomotion.tres                      ← AnimationLibrary: idle, walk 8 hướng, sprint 8 hướng, turn trái/phải
+    ├── source/locomotion/, source/crouch/    ← animation đã chuẩn hoá (.blend), Godot import trực tiếp
+    ├── clips/*.res, clips/crouch/*.res       ← clip Godot tách ra khi import
+    ├── locomotion.tres                      ← AnimationLibrary: idle, walk 8 hướng, sprint 8 hướng, turn 90/180
+    └── crouch.tres                          ← AnimationLibrary: idle, walk 8 hướng, turn 90/180 khi ngồi (Bước 19)
 scenes/
 ├── characters/swat/
 │   ├── swat_model.tscn                       ← model SWAT + AnimationPlayer (kho animation)
@@ -97,12 +98,14 @@ scripts/
 tools/blender/
 ├── make_in_place.py                          ← xoá chuyển động trôi của animation
 ├── make_turn_in_place.py                     ← tách phần xoay (theo Spine, quanh gốc) khỏi clip xoay tại chỗ
+├── turn_batch.py                             ← Bước 18.2 tự động: TurnYaw + tách xoay + xoá hông trôi (Bước 19)
 └── mixamo_batch_import.py                    ← import hàng loạt FBX Mixamo → .blend (bỏ prefix, In Place, đưa về tâm)
 tools/godot/
 ├── bake_turn_curves.gd                       ← EditorScript: track TurnYaw trong clip turn → Curve *_yaw.tres
 └── turn_in_place_import.gd                   ← Import Script thử nghiệm: tách xoay + tạo curve ngay lúc import FBX
 assets/characters/animations/humanoid/turn_curves/
-└── turn_<trái|phải>_<90|180>_yaw.tres        ← góc Spine theo thời gian của từng clip turn (Bước 18)
+├── turn_<left|right>_<90|180>_yaw.tres        ← góc Spine theo thời gian của từng clip turn (Bước 18)
+└── crouch_turn_<left|right>_<90|180>_yaw.tres ← như trên, cho clip turn khi ngồi (Bước 19)
 ```
 
 ## Quy ước đặt tên
@@ -992,6 +995,7 @@ Làm cho từng clip, ví dụ `turn_right_180` từ file Mixamo `Rifle Turn.fbx
 - Chỉ chọn `TurnYaw` → **Object → Animation → Bake Action…**: Start / End của clip, ☑ Only Selected, ☑ Visual Keying, ☑ Clear Constraints, ☐ Overwrite Current Action, Bake Data **Object** → OK.
 - Đổi tên **action** (không phải tên object): Dope Sheet → **Action Editor**, chọn `TurnYaw` → ô tên action → **`turn_right_180_yaw`**.
 - Kiểm tra: Graph Editor → **Z Euler Rotation** đi từ ≈0 tới góc của clip (bảng 18.1). Clip 180° vượt mốc ±180 vẫn liền mạch.
+- ⚠ Nếu đường Z **nhảy thẳng đứng khoảng 180°** giữa chừng (gặp ở clip 180° khi ngồi, vì Spine cúi), Copy Rotation đã bị lật Euler. Với clip đó, dùng `turn_batch.py` (Bước 19.2).
 
 **5. Empty `Unturn` (tạm) để xoay ngược.** **Shift+A → Empty → Plain Axes**, tên **`Unturn`**, Location 0, 0, 0. **Copy Rotation**: Target `TurnYaw`, Axis **chỉ Z**, hàng **Invert** tick **Z**, Order `XYZ Euler`, World / World.
 
@@ -1022,7 +1026,7 @@ Mẹo nhớ: animation tên **`_yaw`** → thư mục **`turn_curves`**. Animati
 ### 18.4 Tạo curve `.tres`
 Godot không có nút chuyển track animation thành `Curve`, nên dùng EditorScript `tools/godot/bake_turn_curves.gd`:
 1. Mở file trong Script Editor → **File → Run** (**Ctrl+Shift+X**).
-2. Script đọc track `TurnYaw` trong mọi file ở `source/locomotion/turn/`, lấy góc quanh trục Y ở từng frame (30 fps), cộng dồn, tạo `Curve` (X = giây, Y = độ, `max_domain` = thời lượng clip) và lưu bằng `ResourceSaver` → `turn_curves/<tên>_yaw.tres`.
+2. Script đọc track `TurnYaw` trong mọi file ở các thư mục của `SOURCE_DIRS` (`source/locomotion/turn/`, `source/crouch/turn/`), lấy góc quanh trục Y ở từng frame (30 fps), cộng dồn, tạo `Curve` (X = giây, Y = độ, `max_domain` = thời lượng clip) và lưu bằng `ResourceSaver` → `turn_curves/<tên>_yaw.tres`.
 3. Output: `[Bake Turn] turn_right_180.blend  -179.7°  1.900 s  58 điểm → …_yaw.tres`. File chưa có `TurnYaw` thì báo lỗi đỏ và bỏ qua.
 
 ### 18.5 AnimationTree: `TurnInPlace`
@@ -1070,6 +1074,107 @@ rotation.y = wrapf(_turn_start_yaw + deg_to_rad(spine_turned), -PI, PI)
 
 ### 18.8 Thêm góc mới (45°, 135°…)
 Làm 18.2 → 18.4 cho clip mới, thêm clip vào library, thêm điểm vào `TurnInPlace` tại góc Output in ra, thêm curve vào Turn Curves. Code không cần sửa.
+
+---
+
+## Bước 19: Ngồi (Crouch): idle, đi 8 hướng, xoay 90/180
+
+Bấm **C** để ngồi / đứng. Khi ngồi, nhân vật đi chậm 8 hướng và xoay tại chỗ bằng clip turn crouch, theo cách của Bước 18. Giữ **Shift** thì đứng dậy chạy luôn.
+
+### 19.1 Clip
+| Clip (library `crouch`) | File Mixamo | Ghi chú |
+|---|---|---|
+| `idle` | Crouching Idle | Hông cao 0.44 m |
+| `walk_forward` … `walk_backward_right` (8 clip) | Walk Crouching Forward / Left / … | In Place bằng script, tốc độ đo được **1.96 m/s**, hông 0.68 m |
+| `turn_left_90`, `turn_left_180`, `turn_right_90`, `turn_right_180` | Turn Left 90 Crouch … | Hông 0.77 m, Loop None |
+
+Đặt tên file nguồn đúng tên clip: `crouch_walk_forward.blend`, `crouch_turn_left_90.blend`… Trong library, tiền tố `crouch_` được bỏ, nên clip có tên `crouch/walk_forward`.
+
+### 19.2 Blender (bằng script)
+```powershell
+$blender = "C:\Program Files\Blender Foundation\Blender 5.3\blender.exe"
+# Walk: import + bỏ prefix + In Place + đưa về tâm (in ra tốc độ)
+& $blender -b --python tools\blender\mixamo_batch_import.py -- <thư mục fbx walk> <thư mục tạm walk> --in-place
+# Turn: import + bỏ prefix (không In Place)
+& $blender -b --python tools\blender\mixamo_batch_import.py -- <thư mục fbx turn> <thư mục tạm turn>
+# Turn: TurnYaw + tách xoay + xoá hông trôi, lưu thẳng vào source/crouch/turn
+& $blender -b --python tools\blender\turn_batch.py -- assets\characters\animations\humanoid\source\crouch\turn <các file .blend trong thư mục tạm turn>
+```
+`turn_batch.py` làm đúng Bước 18.2, chỉ khác 2 chỗ:
+1. **`TurnYaw` được key thẳng bằng góc Spine đo được** (trục ngang vai ↔ vai chiếu xuống sàn), không dùng Copy Rotation. Khi ngồi, Spine cúi về trước nên Copy Rotation "chỉ Z" bị lật Euler 180° ở clip 180°. Đo được: clip `turn_left_180` ra +5° thay vì +185°. Với clip 90°, 2 cách cho kết quả như nhau.
+2. **Xoá dần phần hông trôi.** Clip turn crouch vừa xoay vừa bước lệch chỗ 24–42 cm. Nếu để nguyên, cuối clip người lệch khỏi capsule rồi giật về khi chuyển sang idle. Script trừ dần phần lệch theo thời gian để cuối clip hông về đúng chỗ đầu clip.
+
+Kết quả: Spine còn xoay **0.00°**, hông còn trôi **0.0 cm**.
+
+### 19.3 Godot: import, curve, library
+1. Với mỗi file `.blend`, mở Advanced Import:
+   - Skeleton3D → Bone Map = `humanoid_bone_map.tres`.
+   - Animation của Armature → Save to File `clips/crouch/<idle|walk|turn>/<tên>.res`.
+   - Loop Mode **Linear** cho idle/walk, **None** cho turn (như 18.3).
+2. Chạy `tools/godot/bake_turn_curves.gd` (File → Run). Script tạo `turn_curves/crouch_turn_*_yaw.tres`:
+
+   | Clip | Góc Spine | Thời lượng |
+   |---|---|---|
+   | `crouch_turn_left_90` | +90.4° | 1.267 s |
+   | `crouch_turn_left_180` | +185.3° | 1.533 s |
+   | `crouch_turn_right_90` | −83.8° | 1.500 s |
+   | `crouch_turn_right_180` | −179.4° | 1.467 s |
+3. Tạo AnimationLibrary **`crouch.tres`** chứa 13 clip. Mở `swat_model.tscn` → AnimationPlayer → Manage Animations → **Load Library** `crouch.tres` (tên gọi `crouch`).
+
+### 19.4 AnimationTree
+Thêm 2 state cạnh `Locomotion` / `TurnInPlace`:
+
+| State | Loại | Thiết lập |
+|---|---|---|
+| **`Crouch`** | BlendSpace2D | Min/Max **±1.1**, **Sync ☑**. `idle` (0, 0). `walk_forward` (0, 1), `walk_backward` (0, −1), `walk_left` (−1, 0), `walk_right` (1, 0), 4 clip chéo **(±0.71, ±0.71)** |
+| **`CrouchTurn`** | BlendSpace1D | Min −190, Max 190, **Discrete**. Điểm `185.3` → `turn_left_180`, `90.4` → `turn_left_90`, `-83.8` → `turn_right_90`, `-179.4` → `turn_right_180` |
+
+Mũi tên đặt Advance Mode **Enabled** (code gọi `travel()`):
+- `Locomotion ↔ Crouch`: Xfade **0.3**.
+- `Crouch → CrouchTurn`: **0.15**.
+- `CrouchTurn → Crouch`: **0.2**.
+
+### 19.5 Code
+```gdscript
+# humanoid_character.gd
+@export var crouch_speed := 1.95                      # = tốc độ clip crouch_walk
+@export var crouch_turn_curves: Array[Curve] = []     # 4 file crouch_turn_*_yaw.tres
+var is_crouching := false                             # controller bật/tắt
+
+# _apply_movement: ngồi → crouch_speed, giữ Shift → run_speed, còn lại → walk_speed
+# _start_turn: ngồi → chọn trong crouch_turn_curves, đặt CrouchTurn/blend_position,
+#              chốt _turn_state = "CrouchTurn" (bấm C giữa chừng thì clip xoay vẫn chạy hết)
+# _update_state_machine: đang xoay → _turn_state, ngồi → "Crouch", còn lại → "Locomotion"
+# _update_animation: blend = vận tốc ÷ (crouch_speed nếu ngồi, walk_speed nếu đứng)
+#                    Crouch/blend_position = blend.limit_length(1.0)  (Crouch không có vòng sprint)
+
+# player_controller.gd
+if Input.is_action_just_pressed("crouch"):
+	character.is_crouching = not character.is_crouching
+if character.is_running:
+	character.is_crouching = false
+```
+Input Map: action **`crouch`** = phím **C** (Physical, All Devices).
+
+Trong `swat_character.tscn` → Turning → **Crouch Turn Curves**, gán 4 file `crouch_turn_*_yaw.tres`. Dưới `Model` đã có Node3D `TurnYaw` để hết cảnh báo track (18.7).
+
+### 19.6 Kiểm tra (F6 `test_player.tscn`)
+| Thao tác | Kết quả mong đợi (đã test headless) |
+|---|---|
+| Bấm C | State `Crouch`, nhân vật hạ người |
+| Đang ngồi, bấm W | Đi crouch 1.95 m/s, chân không trượt |
+| Ngồi yên, chuột lệch khoảng 90° | `CrouchTurn` phát clip 90, thân xoay +90.4° / −83.8° |
+| Ngồi yên, chuột lệch khoảng 180° | Phát clip 180, nhân vật không bị trôi khỏi chỗ |
+| Giữ Shift khi đang ngồi | Đứng dậy chạy |
+| Bấm C lần nữa | Về `Locomotion` |
+
+### 19.7 Lưu ý: độ cao hông không khớp
+3 nhóm clip có độ cao hông khác nhau: idle **0.44 m**, walk **0.68 m**, turn **0.77 m**. Vì vậy khi chuyển idle ↔ walk / turn, người sẽ nhô lên rồi hạ xuống.
+
+Muốn mượt hơn:
+1. Tải thêm từ Mixamo một clip **crouch idle cùng bộ với clip turn**. Đầu clip turn có hông cao 0.77 m, nên idle mới cũng nên cao khoảng đó.
+2. Thay file `crouch_idle.blend`.
+3. Làm lại 19.3, chỉ phần import.
 
 ---
 
@@ -1180,6 +1285,16 @@ Blender tạo file `.blend1` mỗi lần lưu đè. Quy tắc LFS `*.blend` khô
 | Chân vẫn bị kéo về chỗ cũ sau khi xoay | Clip `.res` chưa import lại, hoặc còn dùng cách cũ (xoay quanh Hips) | Reimport file nguồn. Làm theo 18.2 |
 | Clip 180° bị lật hông ở cuối | Góc đo bằng wrap cả góc (nhảy dấu ở ±180°) | Cộng dồn từng frame (script / EditorScript hiện tại đã làm) |
 
+### Ngồi (Bước 19)
+| Triệu chứng | Nguyên nhân | Cách sửa |
+|---|---|---|
+| Bấm C không có gì xảy ra | Input Map chưa có action `crouch`, hoặc bộ gõ tiếng Việt chặn phím | Thêm action (19.5). Tắt bộ gõ |
+| Ngồi yên, chuột lệch nhiều nhưng chỉ vặn thân trên | Chưa gán Crouch Turn Curves | Gán trong `swat_character.tscn` (19.5). Output có cảnh báo `chưa gán Crouch Turn Curves` |
+| Curve `crouch_turn_*_180` ra góc khoảng 0° hoặc nhảy 180° | `TurnYaw` bake bằng Copy Rotation chỉ Z, bị lật Euler vì Spine cúi | Dùng `turn_batch.py` (19.2) |
+| Xoay xong, người giật về chỗ cũ | Clip turn crouch còn phần hông trôi | `turn_batch.py` đã xoá phần này. Reimport clip |
+| Đi khi ngồi bị trượt chân | `crouch_speed` khác tốc độ clip | Đặt 1.95 m/s (đo được 1.96) |
+| Chuyển idle ↔ đi thấy người nhô lên | Clip idle và walk khác độ cao hông | Xem 19.7 |
+
 ---
 
 ## Lộ trình
@@ -1189,7 +1304,7 @@ Blender tạo file `.blend1` mỗi lần lưu đè. Quy tắc LFS `*.blend` khô
 | 0 | Chuẩn bị asset: skeleton, SWAT, material, BoneMap | ✅ |
 | 1 | Pipeline animation: idle, walk 8 hướng, sprint 8 hướng, turn trái/phải, In Place + đưa về tâm, 1 BoneMap, library `locomotion`, script Blender (batch import) | ✅ |
 | 2 | Scene nhân vật: `swat_character.tscn`, AnimationTree (BlendSpace2D), `humanoid_character.gd`, scene test | ✅ |
-| 3 | Điều khiển người chơi: ngắm theo chuột, camera đi theo, WASD theo camera, xoay thân trên (`SpineTwistModifier`), xoay tại chỗ theo Spine (Turn 90/180, BlendSpace1D `TurnInPlace`, curve góc Spine), sprint 8 hướng (Shift), camera mượt (Physics Interpolation) | ✅ |
+| 3 | Điều khiển người chơi: ngắm theo chuột, camera đi theo, WASD theo camera, xoay thân trên (`SpineTwistModifier`), xoay tại chỗ theo Spine (Turn 90/180, BlendSpace1D `TurnInPlace`, curve góc Spine), sprint 8 hướng (Shift), camera mượt (Physics Interpolation), ngồi (C: idle, đi 8 hướng, xoay 90/180, library `crouch`) | ✅ |
 | 4 | Vũ khí: model súng (SCAR-L đã kiểm tra, cần chuẩn hoá), gắn vào tay (`BoneAttachment3D`), `WeaponData`, bắn hitscan, nạp đạn, hiệu ứng | ⏸ Tạm hoãn |
 | 5 | Chiến đấu: máu, hitbox/hurtbox, animation thân trên (bắn, nạp đạn, trúng đạn, chết) | ⬜ |
 | 6 | Kẻ địch: Navigation, AI (dùng lại `HumanoidCharacter`, chỉ thay controller) | ⬜ |

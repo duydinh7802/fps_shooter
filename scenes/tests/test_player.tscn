@@ -31,5 +31,3 @@ size = Vector3(40, 0.2, 40)
 material = SubResource("StandardMaterial3D_hd4vj")
 
 [node name="Player" parent="." instance=ExtResource("1_om70x")]
-aim_height = null
-aim_dead_zone = null
