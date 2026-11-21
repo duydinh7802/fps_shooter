@@ -91,7 +91,8 @@ scenes/
 scripts/
 ├── characters/
 │   ├── humanoid_character.gd                 ← di chuyển, luật xoay, AnimationTree (dùng chung player/AI)
-│   └── spine_twist_modifier.gd               ← xoay thân trên theo hướng ngắm
+│   ├── spine_twist_modifier.gd               ← xoay thân trên theo hướng ngắm
+│   └── lean_modifier.gd                      ← nghiêng nửa thân trên theo hướng màn hình khi giữ Q / E (Bước 20)
 ├── player/player_controller.gd               ← đọc WASD + chuột, ra lệnh cho nhân vật
 ├── camera/top_down_camera.gd                 ← camera bám theo nhân vật
 └── tests/test_character_driver.gd            ← đọc WASD cho scene test cũ
@@ -1178,6 +1179,54 @@ Muốn mượt hơn:
 
 ---
 
+## Bước 20: Nghiêng người (Q / E)
+
+Giữ **Q** thì nghiêng về **bên trái màn hình**, giữ **E** thì nghiêng về **bên phải màn hình**, nhả phím thì về thẳng. Hướng nghiêng tính theo thế giới (theo camera, giống WASD), **không** theo trái/phải của nhân vật. Ví dụ nhân vật quay mặt sang phải màn hình mà bấm E, người sẽ ngả về phía trước.
+
+Cách làm giống Bước 13: **`LeanModifier`** (`scripts/characters/lean_modifier.gd`) là một `SkeletonModifier3D`, cộng thêm góc nghiêng **sau** khi AnimationTree đã đặt tư thế. Nhờ vậy nó dùng được cho mọi state (đứng, ngồi, đi, xoay) mà không cần clip.
+
+### 20.1 Cách hoạt động
+- `lean` là một **Vector3 nằm ngang trong thế giới**: hướng của nó là phía đầu ngả về, độ dài là góc nghiêng (radian).
+- Trục quay = `UP × hướng`. Quay quanh trục này một góc dương thì đỉnh đầu ngả đúng về hướng đó.
+- **Cả nửa thân trên nghiêng như một khối từ eo**: toàn bộ góc dồn vào bone `Spine` (ngay trên hông). Ngực, tay, súng, đầu là con của Spine nên đi theo. Muốn lưng cong dần thì chia góc sang `Chest` / `UpperChest`.
+- Modifier được gắn **sau `SpineTwistModifier`**, nên vặn theo chuột chạy trước, nghiêng chạy sau.
+- **Không dịch Hips**: Hips là bone gốc, dịch nó sẽ kéo cả bàn chân trượt theo.
+
+### 20.2 Input và code
+- Input Map: `lean_left` = **Q**, `lean_right` = **E** (Physical, All Devices).
+- `player_controller.gd` → `_get_lean_input()`: lấy `Input.get_axis("lean_left", "lean_right")`, xoay theo góc ngang của camera thành hướng thế giới.
+- `humanoid_character.gd` → `_update_lean()`:
+  - Hướng đích = `lean_input × max_lean_angle`.
+  - Khi ngồi, nhân thêm `crouch_lean_scale`.
+  - Khi sprint, hướng đích = 0.
+  - `lean` tiến dần về hướng đích bằng `Vector3.lerp`. Đổi Q ↔ E thì người đi qua tư thế thẳng, không bật ngang.
+- Debug label hiện thêm `lean` (độ lớn, đơn vị độ).
+
+### 20.3 Thông số để chỉnh
+| Ở đâu | Thông số | Mặc định | Ý nghĩa |
+|---|---|---|---|
+| SwatCharacter → Lean | `max_lean_angle` | 22° | Góc nghiêng tối đa |
+| | `crouch_lean_scale` | 0.7 | Khi ngồi chỉ nghiêng bằng chừng này phần |
+| | `lean_smoothing` | 10 | Lớn = nghiêng nhanh, nhỏ = nghiêng chậm |
+| `lean_modifier.gd` | `bone_weights` | Spine 1.0, Chest 0, UpperChest 0 | Cách chia góc cho cột sống, tổng = 1. Dồn vào Spine = nghiêng thẳng từ eo |
+| | `head_counter` | 0 | 0 = đầu nghiêng theo người, 1 = đầu thẳng hẳn |
+
+Modifier được tạo bằng code nên không hiện trong Inspector. Muốn chỉnh `bone_weights` / `head_counter`, sửa giá trị mặc định trong file `.gd`.
+
+### 20.4 Kiểm tra (F6 `test_player.tscn`)
+Kết quả test headless: nhân vật quay mặt 0°, 90°, 180°, −90° rồi giữ E, lần nào đầu cũng ngả về phải màn hình khoảng 20 cm (lệch hướng 3–10° do nhịp thở của clip idle).
+
+| Thao tác | Kết quả mong đợi |
+|---|---|
+| Giữ E / Q | Nửa thân trên ngả về phải / trái màn hình, nhả phím thì về thẳng |
+| Xoay chuột trong lúc giữ E | Người vẫn ngả về phải màn hình |
+| Giữ E khi đi / khi ngồi | Chân bước bình thường, thân trên nghiêng |
+| Giữ Shift chạy | Người về thẳng |
+
+⚠ Ở kiểu gõ **Telex**, phím **E** dùng để gõ dấu (`ee` → `ê`), nên bộ gõ có thể chặn phím E. Chuyển bộ gõ sang tiếng Anh khi chơi.
+
+---
+
 ## Git và LFS
 
 ### `.gitattributes`
@@ -1304,7 +1353,7 @@ Blender tạo file `.blend1` mỗi lần lưu đè. Quy tắc LFS `*.blend` khô
 | 0 | Chuẩn bị asset: skeleton, SWAT, material, BoneMap | ✅ |
 | 1 | Pipeline animation: idle, walk 8 hướng, sprint 8 hướng, turn trái/phải, In Place + đưa về tâm, 1 BoneMap, library `locomotion`, script Blender (batch import) | ✅ |
 | 2 | Scene nhân vật: `swat_character.tscn`, AnimationTree (BlendSpace2D), `humanoid_character.gd`, scene test | ✅ |
-| 3 | Điều khiển người chơi: ngắm theo chuột, camera đi theo, WASD theo camera, xoay thân trên (`SpineTwistModifier`), xoay tại chỗ theo Spine (Turn 90/180, BlendSpace1D `TurnInPlace`, curve góc Spine), sprint 8 hướng (Shift), camera mượt (Physics Interpolation), ngồi (C: idle, đi 8 hướng, xoay 90/180, library `crouch`) | ✅ |
+| 3 | Điều khiển người chơi: ngắm theo chuột, camera đi theo, WASD theo camera, xoay thân trên (`SpineTwistModifier`), xoay tại chỗ theo Spine (Turn 90/180, BlendSpace1D `TurnInPlace`, curve góc Spine), sprint 8 hướng (Shift), camera mượt (Physics Interpolation), ngồi (C: idle, đi 8 hướng, xoay 90/180, library `crouch`), nghiêng người (Q / E, `LeanModifier`) | ✅ |
 | 4 | Vũ khí: model súng (SCAR-L đã kiểm tra, cần chuẩn hoá), gắn vào tay (`BoneAttachment3D`), `WeaponData`, bắn hitscan, nạp đạn, hiệu ứng | ⏸ Tạm hoãn |
 | 5 | Chiến đấu: máu, hitbox/hurtbox, animation thân trên (bắn, nạp đạn, trúng đạn, chết) | ⬜ |
 | 6 | Kẻ địch: Navigation, AI (dùng lại `HumanoidCharacter`, chỉ thay controller) | ⬜ |

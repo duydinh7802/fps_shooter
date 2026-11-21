@@ -18,6 +18,7 @@ func _physics_process(_delta: float) -> void:
 		character.is_crouching = not character.is_crouching   # C = bật/tắt ngồi
 	if character.is_running:
 		character.is_crouching = false                        # giữ Shift = đứng dậy chạy luôn
+	character.lean_input = _get_lean_input()
 	var aim_point = _get_aim_point()
 	if aim_point != null:
 		var to_aim: Vector3 = aim_point - character.global_position
@@ -31,6 +32,14 @@ func _get_move_input() -> Vector3:
 	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
 	var camera_yaw := Basis(Vector3.UP, camera.global_rotation.y)
 	return camera_yaw * Vector3(input.x, 0.0, input.y)
+
+
+## Q / E → hướng nghiêng trong thế giới: trái / phải của MÀN HÌNH (theo camera, giống WASD),
+## không phụ thuộc nhân vật đang quay mặt về đâu. Giữ cả hai = 0.
+func _get_lean_input() -> Vector3:
+	var side := Input.get_axis("lean_left", "lean_right")
+	var camera_yaw := Basis(Vector3.UP, camera.global_rotation.y)
+	return camera_yaw * Vector3(side, 0.0, 0.0)
 
 
 ## Tia từ camera đi qua con trỏ chuột, cắt mặt phẳng ngang ở độ cao aim_height.

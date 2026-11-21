@@ -24,6 +24,11 @@ extends CharacterBody3D
 @export var moving_threshold := 0.2   ## m/s. Nhanh hơn mức này coi là "đang đi"
 @export var twist_smoothing := 15.0   ## độ mượt khi thân trên xoay theo hướng ngắm
 
+@export_group("Lean")
+@export_range(0.0, 45.0, 0.5) var max_lean_angle := 22.0   ## độ. Góc nghiêng tối đa khi giữ Q / E
+@export_range(0.0, 1.0, 0.05) var crouch_lean_scale := 0.7 ## khi ngồi chỉ nghiêng bằng chừng này phần
+@export var lean_smoothing := 10.0                         ## độ mượt khi nghiêng / về thẳng
+
 @export_group("Debug")
 @export var show_debug := true        ## mũi tên ngắm (đỏ), mũi tên chân (xanh), chữ thông số
 
@@ -35,6 +40,10 @@ var aim_direction := Vector3.FORWARD
 var is_running := false
 ## true khi đang ngồi (controller bật/tắt)
 var is_crouching := false
+## Muốn nghiêng: −1 = trái (Q), +1 = phải (E), 0 = thẳng (controller gán)
+var lean_input := Vector3.ZERO
+## Nghiêng hiện tại trong thế giới (đã làm mượt): hướng = phía đầu ngả về, độ dài = góc (radian)
+var lean := Vector3.ZERO
 
 ## Góc ngắm (radian), tính từ aim_direction
 var aim_yaw := 0.0
@@ -59,6 +68,7 @@ var _playback: AnimationNodeStateMachinePlayback
 var _anim_state := &"Locomotion"
 var _over_threshold_time := 0.0
 var _spine_twist: SpineTwistModifier
+var _lean_modifier: LeanModifier
 var _aim_arrow: MeshInstance3D
 var _body_arrow: MeshInstance3D
 var _debug_label: Label3D
@@ -74,6 +84,9 @@ func _ready() -> void:
 	aim_yaw = rotation.y
 	_spine_twist = SpineTwistModifier.new()
 	skeleton.add_child(_spine_twist)
+	# Thêm SAU twist: modifier chạy theo thứ tự node con → vặn theo chuột trước, nghiêng sau
+	_lean_modifier = LeanModifier.new()
+	skeleton.add_child(_lean_modifier)
 	_turn_curves.assign(turn_curves)
 	if _turn_curves.is_empty():
 		push_warning("%s: chưa gán Turn Curves → đứng yên sẽ không xoay chân, chỉ vặn thân trên" % name)
@@ -89,6 +102,7 @@ func _physics_process(delta: float) -> void:
 	_update_state_machine()
 	_update_animation(delta)
 	_update_spine_twist(delta)
+	_update_lean(delta)
 	_update_debug()
 
 
@@ -227,6 +241,18 @@ func _update_spine_twist(delta: float) -> void:
 	_spine_twist.twist = lerp_angle(_spine_twist.twist, twist, weight)
 
 
+func _update_lean(delta: float) -> void:
+	# Đang sprint (giữ Shift và chạy nhanh hơn đi bộ) → không nghiêng
+	var sprinting := is_running and Vector2(velocity.x, velocity.z).length() > walk_speed
+	var direction := Vector3(lean_input.x, 0.0, lean_input.z).limit_length(1.0)
+	var target := Vector3.ZERO if sprinting else direction * deg_to_rad(max_lean_angle)
+	if is_crouching:
+		target *= crouch_lean_scale
+	# Làm mượt cả hướng lẫn độ lớn (đổi Q ↔ E thì người đi qua tư thế thẳng, không bật ngang)
+	lean = lean.lerp(target, clampf(lean_smoothing * delta, 0.0, 1.0))
+	_lean_modifier.lean = lean
+
+
 # ---------- Debug ----------
 
 func _create_debug() -> void:
@@ -269,6 +295,6 @@ func _update_debug() -> void:
 	_place_arrow(_aim_arrow, aim_yaw, 1.3)       # đỏ: hướng ngắm (ngang ngực)
 	_place_arrow(_body_arrow, rotation.y, 0.15)  # xanh: hướng chân (sát sàn)
 	_debug_label.global_position = global_position + Vector3.UP * 2.1
-	_debug_label.text = "body %4d°  aim %4d°\ntwist %+4d°  %s" % [
+	_debug_label.text = "body %4d°  aim %4d°\ntwist %+4d°  lean %2d°  %s" % [
 		roundi(rad_to_deg(rotation.y)), roundi(rad_to_deg(aim_yaw)),
-		roundi(rad_to_deg(twist)), _playback.get_current_node()]
+		roundi(rad_to_deg(twist)), roundi(rad_to_deg(lean.length())), _playback.get_current_node()]
