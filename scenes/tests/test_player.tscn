@@ -1,0 +1,33 @@
+[gd_scene load_steps=6 format=3 uid="uid://cu5wu5nqrwmw7"]
+
+[ext_resource type="PackedScene" uid="uid://dmyq47vaxitgy" path="res://scenes/player/player.tscn" id="1_om70x"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_fnfjc"]
+
+[sub_resource type="Sky" id="Sky_fnfjc"]
+sky_material = SubResource("ProceduralSkyMaterial_fnfjc")
+
+[sub_resource type="Environment" id="Environment_fnfjc"]
+background_mode = 2
+sky = SubResource("Sky_fnfjc")
+ambient_light_source = 3
+ambient_light_color = Color(0.5294118, 0.80784315, 0.92156863, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hd4vj"]
+
+[node name="TestPlayer" type="Node3D"]
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.8660254, 0.38302222, -0.32139382, 0, 0.64278764, 0.76604444, 0.5, -0.66341394, 0.5566704, -50, -30, 0)
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_fnfjc")
+
+[node name="Floor" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.024978876, -0.11953411, 0.0014038086)
+use_collision = true
+size = Vector3(40, 0.2, 40)
+material = SubResource("StandardMaterial3D_hd4vj")
+
+[node name="Player" parent="." instance=ExtResource("1_om70x")]

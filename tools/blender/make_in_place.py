@@ -7,6 +7,10 @@ ROOT_BONE = "Hips"
 arm = bpy.context.view_layer.objects.active
 if arm is None or arm.type != 'ARMATURE':
     arm = next(o for o in bpy.data.objects if o.type == 'ARMATURE')
+# Ở Edit Mode, Blender không tính tư thế animation → phải về Object Mode trước
+bpy.context.view_layer.objects.active = arm
+if arm.mode != 'OBJECT':
+    bpy.ops.object.mode_set(mode='OBJECT')
 action = arm.animation_data.action
 pb = arm.pose.bones[ROOT_BONE]
 f0, f1 = (int(round(x)) for x in action.frame_range)
@@ -45,3 +49,20 @@ for i, fc in curves.items():
 
 q0, q1 = hips_world(f0), hips_world(f1)
 print(f"[In Place] {action.name}: drift before = {drift_world.length:.3f} m, after = {Vector((q1.x-q0.x, q1.y-q0.y)).length:.4f} m")
+
+# Đưa hông về tâm: vị trí ngang trung bình của hông trong cả clip phải trùng vị trí hông ở rest pose.
+# (Một số clip Mixamo bắt đầu lệch sẵn khỏi gốc toạ độ, ví dụ 1.8 m, dù không còn trôi.)
+rest = arm.matrix_world @ pb.bone.head_local
+frames = range(f0, f1 + 1)
+avg = sum((hips_world(f) for f in frames), Vector()) / len(frames)
+offset_world = Vector((avg.x - rest.x, avg.y - rest.y, 0.0))
+offset_loc = pb.bone.matrix_local.to_3x3().inverted() @ (arm.matrix_world.inverted().to_3x3() @ offset_world)
+for i, fc in curves.items():
+    for kp in fc.keyframe_points:
+        kp.co.y -= offset_loc[i]
+        kp.handle_left.y -= offset_loc[i]
+        kp.handle_right.y -= offset_loc[i]
+    fc.update()
+avg_after = sum((hips_world(f) for f in frames), Vector()) / len(frames)
+print(f"[In Place] {action.name}: center offset before = {offset_world.length:.3f} m, "
+      f"after = {Vector((avg_after.x - rest.x, avg_after.y - rest.y)).length:.4f} m")

@@ -20,3 +20,8 @@ Desktop.ini
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# Blender backup files
+*.blend1
+*.blend2
+    
