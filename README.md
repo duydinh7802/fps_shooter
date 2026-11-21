@@ -96,8 +96,13 @@ scripts/
 └── tests/test_character_driver.gd            ← đọc WASD cho scene test cũ
 tools/blender/
 ├── make_in_place.py                          ← xoá chuyển động trôi của animation
-├── make_turn_in_place.py                     ← xoá phần xoay hông của animation xoay tại chỗ
+├── make_turn_in_place.py                     ← tách phần xoay (theo Spine, quanh gốc) khỏi clip xoay tại chỗ
 └── mixamo_batch_import.py                    ← import hàng loạt FBX Mixamo → .blend (bỏ prefix, In Place, đưa về tâm)
+tools/godot/
+├── bake_turn_curves.gd                       ← EditorScript: track TurnYaw trong clip turn → Curve *_yaw.tres
+└── turn_in_place_import.gd                   ← Import Script thử nghiệm: tách xoay + tạo curve ngay lúc import FBX
+assets/characters/animations/humanoid/turn_curves/
+└── turn_<trái|phải>_<90|180>_yaw.tres        ← góc Spine theo thời gian của từng clip turn (Bước 18)
 ```
 
 ## Quy ước đặt tên
@@ -381,6 +386,8 @@ Cuối cùng script in bảng: `clip | dài (s) | trôi (m) | tốc độ (m/s)`
 - Nếu đã lỡ tải với In Place ☑ (độ trôi bằng 0), vẫn đo được bằng **bàn chân**: lúc chân chạm đất, nó trượt ngược về sau so với hông đúng bằng tốc độ di chuyển. Cách này đã kiểm chứng trên clip walk, cho kết quả 1.76–1.85 m/s, khớp với cách đo bằng độ trôi.
 
 ### 6.4b Animation xoay tại chỗ (Rifle Turn Left / Right)
+> ⚠️ **Cách cũ.** Xoay ngược quanh Hips làm chân trụ trượt. Clip turn hiện dùng cách ở **Bước 18** (xoay theo Spine, quanh gốc, có curve). Phần dưới giữ lại để tham khảo.
+
 Clip Mixamo gốc vừa **bước chân** vừa **xoay hông** khoảng 80°. Trong game, code tự xoay thân nhân vật (Bước 15). Nếu giữ phần xoay trong clip, nhân vật sẽ xoay gấp đôi. Vì vậy cần **xoá phần xoay hông, giữ bước chân**.
 
 Script `tools/blender/make_turn_in_place.py`:
@@ -759,6 +766,8 @@ func _update_spine_twist(delta: float) -> void:   # gọi trong _physics_process
 F6 → dock Scene → tab **Remote** → chọn `Player/SwatCharacter` → đổi số trong Inspector, có tác dụng ngay. Giá trị trong Remote **không tự lưu**: ghi lại rồi nhập vào `swat_character.tscn` sau khi dừng game.
 
 ## Bước 15: Animation xoay tại chỗ
+> ⚠️ **Cách cũ, đã thay bằng Bước 18.** Thân xoay đều 150°/s trong khi clip có nhịp riêng nên chân trượt. State `TurnLeft`/`TurnRight` đã xoá, `idle_turn_speed` đã bỏ.
+
 
 ### 15.1 Chuẩn bị clip
 Làm theo 6.4b: `make_turn_in_place.py` rồi `make_in_place.py` cho `turn_left` và `turn_right`. Ghi lại góc: **77°** (trái), **85°** (phải).
@@ -946,6 +955,122 @@ func _process(delta: float) -> void:
 - **Khi sprint, nhân vật lệch về phía hướng chạy** khoảng `tốc độ ÷ follow_speed` (5.8 ÷ 10 ≈ 0.6 m). Đây là độ trễ có chủ ý của camera. Muốn bám sát hơn thì tăng `follow_speed` lên 15–20.
 - AnimationTree đang để **Callback Mode = Physics**, nên tư thế xương cập nhật 60 lần/giây. Nếu thấy tay chân hơi giật ở màn 144 Hz, đổi sang **Idle**.
 
+## Bước 18: Xoay tại chỗ theo Spine (Turn 90 / 180)
+
+Thay cho Bước 15. Mục tiêu: **khi xoay, trục của nhân vật xoay cùng bone Spine trong animation**, đúng nhịp bước chân của clip gốc.
+
+### 18.1 Ý tưởng
+Clip turn của Mixamo vừa bước chân vừa **xoay cả người**. Trong game, thứ xoay là `CharacterBody3D`, nên phải tách 2 phần ra:
+1. **Blender:** ghi góc của bone Spine ở từng frame vào một Empty `TurnYaw` (đây là "curve"), rồi xoay ngược cả bộ xương đúng góc đó → trong clip, Spine nhìn thẳng một hướng, chân vẫn bước.
+2. **Godot:** khi xoay, code đặt `rotation.y = góc lúc bắt đầu + góc Spine của clip tại thời điểm đó`.
+
+Trục xoay trong Blender (3D Cursor ở gốc, dưới chân) trùng với trục xoay trong Godot (gốc `CharacterBody3D`), nên ghép lại ra đúng chuyển động gốc. Đã đo: hướng Spine so với trục nhân vật dao động **0.1–0.2°** suốt lúc xoay.
+
+Mỗi clip xoay một góc **thật** khác số trên tên của nó. Góc này dùng ở 18.5:
+
+| Clip | Góc Spine | Thời lượng (Godot) |
+|---|---|---|
+| `turn_left_90` | +76.6° | 1.333 s |
+| `turn_left_180` | +185.5° | 1.900 s |
+| `turn_right_90` | −84.7° | 1.500 s |
+| `turn_right_180` | −179.7° | 1.900 s |
+
+Dấu: **+ là xoay trái**, giống `rotation.y` và `angle_difference` trong code.
+
+### 18.2 Blender: bake `TurnYaw` và tách xoay (thao tác tay, từ FBX gốc)
+Làm cho từng clip, ví dụ `turn_right_180` từ file Mixamo `Rifle Turn.fbx`.
+
+**1. File mới, import FBX.** File → New → General → **A**, **X** xoá cube / camera / light. File → Import → **FBX (.fbx)**, giữ mặc định.
+
+**2. Bỏ prefix bone.** Chọn Armature → **Ctrl+F2** (Batch Rename) → Data type **Bones**, Find `swat:` (prefix Mixamo đặt theo tên nhân vật), Replace để trống → OK. Animation tự cập nhật theo tên mới.
+
+**3. Khung clip và cursor.** Timeline: **Start 1**, **End** = frame cuối của clip (ví dụ 57). **Shift+C** đưa 3D Cursor về gốc.
+
+**4. Empty `TurnYaw` ghi góc Spine.**
+- **Shift+A → Empty → Plain Axes**, **F2** đặt tên object đúng là **`TurnYaw`** (Godot và code tìm theo tên này). Location 0, 0, 0.
+- Tab **Object Constraint** → **Copy Rotation**: Target `Armature`, Bone `Spine`, Axis **chỉ Z** (Blender dùng Z là trục đứng), Order `XYZ Euler`, Mix `Replace`, World Space / World Space. Kéo timeline: trục Empty xoay theo ngực.
+- Chỉ chọn `TurnYaw` → **Object → Animation → Bake Action…**: Start / End của clip, ☑ Only Selected, ☑ Visual Keying, ☑ Clear Constraints, ☐ Overwrite Current Action, Bake Data **Object** → OK.
+- Đổi tên **action** (không phải tên object): Dope Sheet → **Action Editor**, chọn `TurnYaw` → ô tên action → **`turn_right_180_yaw`**.
+- Kiểm tra: Graph Editor → **Z Euler Rotation** đi từ ≈0 tới góc của clip (bảng 18.1). Clip 180° vượt mốc ±180 vẫn liền mạch.
+
+**5. Empty `Unturn` (tạm) để xoay ngược.** **Shift+A → Empty → Plain Axes**, tên **`Unturn`**, Location 0, 0, 0. **Copy Rotation**: Target `TurnYaw`, Axis **chỉ Z**, hàng **Invert** tick **Z**, Order `XYZ Euler`, World / World.
+
+**6. Gắn Hips vào `Unturn`.** Về **frame 1**. Chọn Armature → **Ctrl+Tab** (Pose Mode) → chọn bone **Hips** → tab **Bone Constraint** → **Child Of** → Target `Unturn` → bấm **Set Inverse**. Kéo timeline: chân vẫn bước, ngực nhìn một hướng.
+
+**7. Bake Hips vào clip.**
+- Pose Mode → **Alt+A** (bỏ chọn hết) → **Select → Select Pattern…** → Pattern `Hips`, ☐ Extend → OK. Hips phải sáng màu xanh. Tab Bone chỉ hiện bone **active**, không có nghĩa là bone đó đang được **chọn**.
+- **Pose → Animation → Bake Action…**: Start / End của clip, ☑ Only Selected, ☑ Visual Keying, ☑ Clear Constraints, ☑ **Overwrite Current Action**, Bake Data **Pose** → OK.
+- Kiểm tra: tab Bone Constraint của Hips **trống**. Kéo timeline: ngực vẫn đứng yên.
+
+**8. Dọn và lưu.** Object Mode → xoá **`Unturn`**, **giữ `TurnYaw`**. Các Empty con của Armature (`HeadTop_End`, `LeftHandIndex4`…) là điểm cuối bone của Mixamo, để nguyên. **File → Save As** → `source/locomotion/turn/turn_right_180.blend`.
+
+> **Tự động hoá bước 5–7:** `make_turn_in_place.py` làm đúng việc của `Unturn` + bake Hips (đo Spine, xoay ngược quanh 3D Cursor). Vẫn phải bake `TurnYaw` (bước 4) **trước** khi chạy script, vì sau đó Spine không còn xoay để copy.
+> ```powershell
+> & $blender -b --python tools\blender\make_turn_in_place.py -- <file.blend> ...
+> ```
+
+### 18.3 Godot: import
+Nhấp đúp file `.blend` → **Advanced Import Settings**:
+1. Cây trái → **Skeleton3D** → **Retarget → Bone Map** = `humanoid_bone_map.tres`.
+2. **Animations** → animation của Armature (tên kiểu `Armature|mixamo_com|Layer0`) → ☑ Save to File, Path **`clips/turn/turn_right_180.res`**, Loop Mode **None**.
+3. *(Dự phòng)* animation **`turn_right_180_yaw`** → ☑ Save to File, Path **`turn_curves/turn_right_180_yaw.res`** (Animation chứa track `TurnYaw`). Hiện code dùng `.tres` (18.4). File `.res` để dành cho hàm `_yaw_to_curve()`.
+4. **Reimport**. Mỗi animation phải lưu vào **file riêng**. Trùng path thì animation sau đè animation trước.
+5. Thêm `clips/turn/*.res` vào library `locomotion` (Manage Animations, 7.1).
+
+Mẹo nhớ: animation tên **`_yaw`** → thư mục **`turn_curves`**. Animation của Armature (bước chân) → **`clips/turn`**.
+
+### 18.4 Tạo curve `.tres`
+Godot không có nút chuyển track animation thành `Curve`, nên dùng EditorScript `tools/godot/bake_turn_curves.gd`:
+1. Mở file trong Script Editor → **File → Run** (**Ctrl+Shift+X**).
+2. Script đọc track `TurnYaw` trong mọi file ở `source/locomotion/turn/`, lấy góc quanh trục Y ở từng frame (30 fps), cộng dồn, tạo `Curve` (X = giây, Y = độ, `max_domain` = thời lượng clip) và lưu bằng `ResourceSaver` → `turn_curves/<tên>_yaw.tres`.
+3. Output: `[Bake Turn] turn_right_180.blend  -179.7°  1.900 s  58 điểm → …_yaw.tres`. File chưa có `TurnYaw` thì báo lỗi đỏ và bỏ qua.
+
+### 18.5 AnimationTree: `TurnInPlace`
+1. Xoá state `TurnLeft` / `TurnRight` cũ.
+2. Chuột phải → **Add BlendSpace1D** → tên đúng **`TurnInPlace`**.
+3. Bên trong: **Min `-190`**, **Max `190`**, **Blend Mode `Discrete`** (chỉ phát đúng 1 clip, không trộn bước chân của 2 clip).
+4. Điểm đặt **đúng góc cuối của curve** (bảng 18.1), vì code đặt `blend_position` bằng giá trị này:
+
+   | Toạ độ | Clip |
+   |---|---|
+   | `185.5` | `turn_left_180` |
+   | `76.6` | `turn_left_90` |
+   | `-84.7` | `turn_right_90` |
+   | `-179.7` | `turn_right_180` |
+5. Mũi tên, Advance Mode **Enabled**: `Locomotion → TurnInPlace` Xfade **0.15**, `TurnInPlace → Locomotion` Xfade **0.2**.
+
+### 18.6 Code (`humanoid_character.gd`)
+```gdscript
+@export var turn_curves: Array[Curve] = []   # 4 file *_yaw.tres
+
+# Đứng yên, lệch quá max_twist_angle trong turn_delay → _start_turn(diff):
+#   chọn curve CÙNG CHIỀU có góc cuối gần góc lệch nhất,
+#   chốt _turn_start_yaw = rotation.y, đặt TurnInPlace/blend_position = góc cuối curve.
+# Đang xoay:
+_turn_time += delta
+var spine_turned := _turn_curve.sample(minf(_turn_time, _turn_curve.max_domain))
+rotation.y = wrapf(_turn_start_yaw + deg_to_rad(spine_turned), -PI, PI)
+# Hết curve → về Locomotion. Còn lệch quá 60° thì lần sau chọn clip mới xoay tiếp.
+# Đang đi (có vận tốc) → huỷ xoay tại chỗ.
+```
+- Thân chỉ xoay **đúng góc của clip** (ví dụ 76.6° chứ không phải 90°). Phần lệch còn lại do twist thân trên bù.
+- `_yaw_to_curve()` (dự phòng) đọc file `_yaw.res` kiểu Animation và đổi sang Curve. Cách dùng ghi ngay trên hàm.
+
+### 18.7 Gán curve và kiểm tra
+1. Mở **`swat_character.tscn`** (scene gốc, không phải scene test) → SwatCharacter → Turning → **Turn Curves** → Size 4 → kéo 4 file `turn_curves/*_yaw.tres` vào → Ctrl+S. Thứ tự không quan trọng.
+2. Clip bước chân có kèm track `TurnYaw` 1 key. Muốn hết cảnh báo `couldn't resolve track: 'TurnYaw'`: chuột phải **Model** → Add Child Node → **Node3D** tên **`TurnYaw`**.
+3. F6 `test_player.tscn`:
+
+| Thao tác | Kết quả mong đợi |
+|---|---|
+| Đứng yên, chuột lệch dưới 60° | Chỉ vặn thân trên |
+| Lệch khoảng 60–130° | `TurnInPlace` phát clip 90, thân xoay theo nhịp bước chân (chậm → nhanh → dừng) |
+| Lệch nhiều hơn | Phát clip 180 |
+| Đang xoay thì bấm W | Huỷ xoay, đi bình thường |
+
+### 18.8 Thêm góc mới (45°, 135°…)
+Làm 18.2 → 18.4 cho clip mới, thêm clip vào library, thêm điểm vào `TurnInPlace` tại góc Output in ra, thêm curve vào Turn Curves. Code không cần sửa.
+
 ---
 
 ## Git và LFS
@@ -1042,6 +1167,19 @@ Blender tạo file `.blend1` mỗi lần lưu đè. Quy tắc LFS `*.blend` khô
 | Khi sprint, nhân vật nhoè, rung, như có bóng mờ | Màn hình tần số cao (144 Hz) trong khi nhân vật di chuyển 60 lần/giây | Bật Physics Interpolation, camera dùng `get_global_transform_interpolated()` (Bước 17) |
 | `follow_speed` trong Inspector chỉ nhập được số nguyên | Khai báo `:= 10` nên kiểu là `int` | Viết `:= 10.0` |
 
+### Xoay tại chỗ theo Spine (Bước 18)
+| Triệu chứng | Nguyên nhân | Cách sửa |
+|---|---|---|
+| Đứng yên chỉ vặn thân trên, chân không bao giờ xoay | Turn Curves chưa gán, hoặc gán ở scene test thay vì `swat_character.tscn` | Gán ở scene gốc (18.7). Output có cảnh báo `chưa gán Turn Curves` |
+| Bake Action Hips xong vẫn còn Child Of, clip không đổi | ☑ Only Selected nhưng **không có bone nào được chọn** | Alt+A → Select → Select Pattern `Hips` → bake lại (18.2 bước 7) |
+| Godot báo không có track `TurnYaw` | Đặt tên **object** là `turn_..._yaw`, hoặc chưa bake Empty | Object tên `TurnYaw`, **action** tên `turn_..._yaw` (18.2 bước 4) |
+| Empty `TurnYaw` copy được góc 0 | Bake Empty sau khi đã tách xoay (Spine không còn xoay) | Bake `TurnYaw` **trước** bước 5–7. Lấy lại FBX gốc |
+| Khi xoay nhân vật đứng cứng | `clips/turn/*.res` đang chứa animation `_yaw` (đặt ngược path, hoặc 2 animation cùng 1 path) | Animation Armature → `clips/turn/`, animation `_yaw` → `turn_curves/`, mỗi cái 1 file (18.3) |
+| `couldn't resolve track: 'TurnYaw'` | Clip bước chân kèm track `TurnYaw`, nhân vật không có node đó | Vô hại. Thêm Node3D `TurnYaw` dưới `Model` để hết (18.7) |
+| Xoay xong lệch hướng hoặc phát sai clip | Toạ độ điểm `TurnInPlace` khác góc cuối của curve | Đặt đúng bảng 18.1 |
+| Chân vẫn bị kéo về chỗ cũ sau khi xoay | Clip `.res` chưa import lại, hoặc còn dùng cách cũ (xoay quanh Hips) | Reimport file nguồn. Làm theo 18.2 |
+| Clip 180° bị lật hông ở cuối | Góc đo bằng wrap cả góc (nhảy dấu ở ±180°) | Cộng dồn từng frame (script / EditorScript hiện tại đã làm) |
+
 ---
 
 ## Lộ trình
@@ -1051,7 +1189,7 @@ Blender tạo file `.blend1` mỗi lần lưu đè. Quy tắc LFS `*.blend` khô
 | 0 | Chuẩn bị asset: skeleton, SWAT, material, BoneMap | ✅ |
 | 1 | Pipeline animation: idle, walk 8 hướng, sprint 8 hướng, turn trái/phải, In Place + đưa về tâm, 1 BoneMap, library `locomotion`, script Blender (batch import) | ✅ |
 | 2 | Scene nhân vật: `swat_character.tscn`, AnimationTree (BlendSpace2D), `humanoid_character.gd`, scene test | ✅ |
-| 3 | Điều khiển người chơi: ngắm theo chuột, camera đi theo, WASD theo camera, xoay thân trên (`SpineTwistModifier`), xoay tại chỗ (TurnLeft/TurnRight), sprint 8 hướng (Shift), camera mượt (Physics Interpolation) | ✅ |
+| 3 | Điều khiển người chơi: ngắm theo chuột, camera đi theo, WASD theo camera, xoay thân trên (`SpineTwistModifier`), xoay tại chỗ theo Spine (Turn 90/180, BlendSpace1D `TurnInPlace`, curve góc Spine), sprint 8 hướng (Shift), camera mượt (Physics Interpolation) | ✅ |
 | 4 | Vũ khí: model súng (SCAR-L đã kiểm tra, cần chuẩn hoá), gắn vào tay (`BoneAttachment3D`), `WeaponData`, bắn hitscan, nạp đạn, hiệu ứng | ⏸ Tạm hoãn |
 | 5 | Chiến đấu: máu, hitbox/hurtbox, animation thân trên (bắn, nạp đạn, trúng đạn, chết) | ⬜ |
 | 6 | Kẻ địch: Navigation, AI (dùng lại `HumanoidCharacter`, chỉ thay controller) | ⬜ |
