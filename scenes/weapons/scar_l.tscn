@@ -1,0 +1,5 @@
+[gd_scene load_steps=2 format=3 uid="uid://pqln1csyd0af"]
+
+[ext_resource type="PackedScene" uid="uid://bc13lg6dlatd6" path="res://assets/weapons/source/scar_l.blend" id="1_vxm21"]
+
+[node name="scar_l" instance=ExtResource("1_vxm21")]

@@ -29,6 +29,11 @@ extends CharacterBody3D
 @export_range(0.0, 1.0, 0.05) var crouch_lean_scale := 0.7 ## khi ngồi chỉ nghiêng bằng chừng này phần
 @export var lean_smoothing := 10.0                         ## độ mượt khi nghiêng / về thẳng
 
+@export_group("Weapon")
+## Node WeaponSocket (dưới RightHandAttachment). Tay trái sẽ bám vào Empty "LeftHandGrip" của súng bên trong nó
+@export var weapon_socket: Node3D
+@export var left_hand_ik := true      ## tắt để xem tay trái theo animation gốc
+
 @export_group("Debug")
 @export var show_debug := true        ## mũi tên ngắm (đỏ), mũi tên chân (xanh), chữ thông số
 
@@ -69,6 +74,7 @@ var _anim_state := &"Locomotion"
 var _over_threshold_time := 0.0
 var _spine_twist: SpineTwistModifier
 var _lean_modifier: LeanModifier
+var _left_hand_ik: LeftHandIKModifier
 var _aim_arrow: MeshInstance3D
 var _body_arrow: MeshInstance3D
 var _debug_label: Label3D
@@ -80,6 +86,8 @@ var _turn_state := &"TurnInPlace"  ## state đang phát clip xoay: TurnInPlace (
 
 
 func _ready() -> void:
+	# Bật lại phòng khi lỡ tắt Active trong editor để xem trước clip bằng AnimationPlayer
+	anim_tree.active = true
 	_playback = anim_tree.get(PLAYBACK_PATH)
 	aim_yaw = rotation.y
 	_spine_twist = SpineTwistModifier.new()
@@ -87,6 +95,22 @@ func _ready() -> void:
 	# Thêm SAU twist: modifier chạy theo thứ tự node con → vặn theo chuột trước, nghiêng sau
 	_lean_modifier = LeanModifier.new()
 	skeleton.add_child(_lean_modifier)
+	# IK tay trái: dùng node có sẵn trong scene (để xem trước trong editor), không có thì tạo mới.
+	for child in skeleton.get_children():
+		if child is LeftHandIKModifier:
+			_left_hand_ik = child
+	if _left_hand_ik == null:
+		_left_hand_ik = LeftHandIKModifier.new()
+		skeleton.add_child(_left_hand_ik)
+	# Dời xuống CUỐI: thân trên đã xoay + nghiêng xong thì mới kéo tay trái vào súng.
+	# (Node trong scene có sẵn từ trước, nên nếu không dời thì nó đứng TRƯỚC twist/lean vừa thêm bằng code)
+	skeleton.move_child(_left_hand_ik, -1)
+	_left_hand_ik.active = left_hand_ik
+	if weapon_socket != null:
+		# owned = false: LeftHandGrip nằm trong scene súng được instance, không "thuộc" scene này
+		_left_hand_ik.target = weapon_socket.find_child("LeftHandGrip", true, false)
+	if _left_hand_ik.target == null:
+		push_warning("%s: chưa gán Weapon Socket (hoặc súng không có LeftHandGrip) → tay trái không bám súng" % name)
 	_turn_curves.assign(turn_curves)
 	if _turn_curves.is_empty():
 		push_warning("%s: chưa gán Turn Curves → đứng yên sẽ không xoay chân, chỉ vặn thân trên" % name)
