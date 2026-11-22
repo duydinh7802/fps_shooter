@@ -80,10 +80,12 @@ assets/characters/
     ├── clips/*.res, clips/crouch/*.res       ← clip Godot tách ra khi import
     ├── locomotion.tres                      ← AnimationLibrary: idle, walk 8 hướng, sprint 8 hướng, turn 90/180
     └── crouch.tres                          ← AnimationLibrary: idle, walk 8 hướng, turn 90/180 khi ngồi (Bước 19)
+assets/weapons/source/scar_l.blend            ← súng SCAR-L đã chuẩn hoá: mét, nòng +Y, gốc ở báng cầm (Bước 21)
 scenes/
 ├── characters/swat/
 │   ├── swat_model.tscn                       ← model SWAT + AnimationPlayer (kho animation)
 │   └── swat_character.tscn                   ← nhân vật hoàn chỉnh: thân, collision, AnimationTree
+├── weapons/scar_l.tscn                       ← scene súng (kế thừa scar_l.blend), sau này gắn script súng
 ├── player/player.tscn                        ← người chơi: SwatCharacter + controller + camera
 └── tests/
     ├── test_character.tscn                   ← test di chuyển (Giai đoạn 2)
@@ -92,7 +94,8 @@ scripts/
 ├── characters/
 │   ├── humanoid_character.gd                 ← di chuyển, luật xoay, AnimationTree (dùng chung player/AI)
 │   ├── spine_twist_modifier.gd               ← xoay thân trên theo hướng ngắm
-│   └── lean_modifier.gd                      ← nghiêng nửa thân trên theo hướng màn hình khi giữ Q / E (Bước 20)
+│   ├── lean_modifier.gd                      ← nghiêng nửa thân trên theo hướng màn hình khi giữ Q / E (Bước 20)
+│   └── left_hand_ik_modifier.gd              ← (@tool) IK tay trái bám ốp súng + ngón tay nắm (Bước 21)
 ├── player/player_controller.gd               ← đọc WASD + chuột, ra lệnh cho nhân vật
 ├── camera/top_down_camera.gd                 ← camera bám theo nhân vật
 └── tests/test_character_driver.gd            ← đọc WASD cho scene test cũ
@@ -1225,7 +1228,180 @@ Kết quả test headless: nhân vật quay mặt 0°, 90°, 180°, −90° rồ
 
 ⚠ Ở kiểu gõ **Telex**, phím **E** dùng để gõ dấu (`ee` → `ê`), nên bộ gõ có thể chặn phím E. Chuyển bộ gõ sang tiếng Anh khi chơi.
 
+## Bước 21: Vũ khí – model, gắn vào tay, IK tay trái, ngón tay nắm súng
+
+Kết quả cuối cùng của bước này:
+- Súng SCAR-L nằm trong tay phải.
+- Tay trái luôn bám vào ốp súng: ngón tay ôm quanh ốp, bàn tay khoá theo súng. Đúng ở mọi tư thế: đứng, đi, chạy, ngồi, nghiêng.
+- Xem và chỉnh được ngay trong editor, không cần F6.
+
+### 21.1 Chuẩn hoá model trong Blender
+File gốc `SCAR L.fbx` (tải về) có 3 vấn đề cần sửa:
+
+| | FBX gốc | Sau khi chuẩn hoá | Lý do |
+|---|---|---|---|
+| Kích thước | dài 10.36 đơn vị | **0.89 m** (scale ×0.086) | Bằng SCAR-L thật, khớp nhân vật |
+| Hướng nòng | +X | **+Y** của Blender | glTF đổi +Y Blender → **−Z** Godot = phía trước |
+| Gốc toạ độ | mỗi bộ phận một chỗ | **đỉnh báng cầm** (chỗ tay phải nắm) | Súng xoay quanh tay |
+
+Cũng cần: xoá viên đạn `5.56x45` thừa, gộp 8 bộ phận còn 3, đổi tên material tiếng Nga.
+
+**Thao tác:**
+1. **File → New → General** → **A** rồi **X** để xoá Cube / Camera / Light.
+2. **File → Import → FBX** → chọn `SCAR L.fbx` → **Import FBX**. Click `5.56x45` → **X** để xoá.
+3. **Đưa gốc về báng cầm:**
+   - **N** → tab **View** → **3D Cursor**: X `-1.7`, Y `0`, Z `1.45`. Nhìn từ trước (**Numpad 1**) để chỉnh cho cursor nằm giữa báng cầm.
+   - **A** để chọn hết → **Object → Set Origin → Origin to 3D Cursor** → **Alt+G**.
+4. **Xoay và scale** (vẫn đang chọn hết):
+   - **Transform Pivot Point** → **3D Cursor** → **Shift+C** để đưa cursor về gốc.
+   - Gõ **R Z 90** (nòng sang +Y) → **S 0.086** → **Ctrl+A → All Transforms**.
+5. **Gộp bộ phận:**
+   - Chọn `Fire Selector`, `IronSights`, `IronSights 2`, `Trigger`, cuối cùng **Ctrl+click** thân `SCAR L` để thân là active → **Ctrl+J**.
+   - **F2** đổi tên: thân → `ScarL`, băng đạn → `Mag`, khoá nòng → `Bolt`.
+   - Chọn `Mag`, `Bolt`, cuối cùng `ScarL` → **Ctrl+P → Object (Keep Transform)**.
+   - `Mag` và `Bolt` để riêng: sau này animation nạp đạn cần rút băng đạn, còn khoá nòng có thể giật khi bắn.
+6. **Thêm Empty** (**Shift+A → Empty → Plain Axes**, Rotation để 0, parent vào `ScarL`):
+   - `Muzzle` = (0, 0.57, 0.095): tâm miệng nòng, điểm bắn đạn.
+   - `LeftHandGrip` = (0, 0.32, 0.07): mặt dưới ốp tay, chỗ tay trái nắm.
+   - Rotation 0 nghĩa là trục −Z của Empty trong Godot trùng hướng nòng.
+7. **Material:** đổi tên thành `M_Scar_Metal1/2`, `M_Scar_BaseLight/Dark`, `M_Scar_Plastic`. Sau đó **File → Clean Up → Purge Unused Data**. Model chỉ có màu, không có texture.
+8. **Ctrl+S** → `assets/weapons/source/scar_l.blend`, lưu ở Object Mode.
+
+**Kiểm tra** (đã đo bằng script):
+- `ScarL` dài 0.891 m; Location / Rotation = 0, Scale = 1.
+- Cây object:
+  ```
+  ScarL
+  ├── Bolt
+  ├── LeftHandGrip
+  ├── Mag
+  └── Muzzle
+  ```
+
+### 21.2 Gắn súng vào tay phải
+Cây node trong `swat_character.tscn`:
+```
+Model (Editable Children)
+└── Skeleton_Reference/GeneralSkeleton
+    ├── RightHandAttachment (BoneAttachment3D, Bone Name = RightHand)   ← bám xương cổ tay phải
+    │   └── WeaponSocket (Node3D)                                        ← dời / xoay súng vào lòng bàn tay
+    │       └── scar_l (scar_l.tscn, transform = 0)
+    └── LeftHandIKModifier                                               ← IK tay trái + ngón tay (21.3–21.4)
+```
+- `BoneAttachment3D` copy vị trí xương **sau** khi mọi modifier (twist, lean, IK) chạy xong, nên súng đi theo thân trên.
+- `WeaponSocket` tách riêng vì xương `RightHand` nằm ở **cổ tay**. Socket lo phần dời súng vào lòng bàn tay. Đổi súng chỉ cần thay node con, không phải chỉnh lại socket.
+
+**Thao tác:**
+1. **Tạo scene súng:** FileSystem → chuột phải `scar_l.blend` → **New Inherited Scene** → **Ctrl+S** → `scenes/weapons/scar_l.tscn`. Sau này script súng gắn vào root của scene này.
+2. Mở `swat_character.tscn` → chuột phải `Model` → tick **Editable Children**.
+3. Chuột phải `Model/Skeleton_Reference/GeneralSkeleton` → **Add Child Node** → `BoneAttachment3D` → đặt tên `RightHandAttachment` → Inspector **Bone Name** = `RightHand`.
+4. Chuột phải `RightHandAttachment` → **Add Child Node** → `Node3D` → đặt tên `WeaponSocket`.
+5. Kéo **`scenes/weapons/scar_l.tscn`** (không phải file `.blend`) thả lên `WeaponSocket`. Kiểm tra Position / Rotation của `scar_l` đều là 0.
+6. Chỉnh vị trí súng trên tay: chọn **`WeaponSocket`** (không chỉnh `scar_l`) → dời / xoay bằng gizmo. Bấm **T** để xoay theo trục Local. Giá trị gợi ý ban đầu (tính từ tư thế idle): Position (0.026, 0.055, 0.005), Rotation (73.3, 121.2, 45.2).
+
+⚠ **Lỗi hay gặp:**
+- Kéo nhầm file `.blend` vào thay vì `.tscn`.
+- Chỉnh lệch trên `scar_l` thay vì trên `WeaponSocket`.
+
+Cả hai vẫn hiển thị đúng, nhưng sau này đổi súng hoặc gắn script súng sẽ bị sai.
+
+### 21.3 IK tay trái và ngón tay nắm súng (`LeftHandIKModifier`)
+Animation Mixamo tự cử động tay trái, nên tay trái không biết súng ở đâu. Khi đi, tay trái lệch ốp súng 10–17 cm.
+
+`scripts/characters/left_hand_ik_modifier.gd` là một `SkeletonModifier3D` chạy **sau `LeanModifier`**. Mỗi frame nó làm 4 việc:
+1. **IK 2 xương** (`LeftUpperArm` → `LeftLowerArm` → `LeftHand`) bằng định lý cos. Nó đổi góc vai và góc khuỷu sao cho vai cách cổ tay đúng bằng vai cách điểm đích, rồi xoay cả cánh tay sang hướng đích. Khuỷu gập trong mặt phẳng mà animation đang gập.
+2. **Điểm đặt lên `LeftHandGrip` không phải cổ tay mà là điểm tiếp xúc.** Điểm này lấy trung bình khớp gốc của các ngón trong `contact_bones` (mặc định là gốc ngón trỏ), để ốp súng nằm ở khe giữa ngón cái và ngón trỏ như cầm súng thật. Xương ngón là con của `LeftHand`, khoảng cách tới cổ tay cố định, nên IK vẫn giải tới `LeftHand`.
+3. **Khoá hướng bàn tay theo súng** (`hand_lock` = 1): lòng bàn tay ngửa lên ôm đáy ốp, ngón tay chĩa chéo về trước. Nếu giữ hướng của animation thì khi đi hoặc ngồi, ốp súng chéo 40–50° so với ngón tay và ngón co lại sẽ không ôm trúng.
+4. **Co ngón:** mỗi đốt bằng tư thế gốc (rest pose) xoay thêm `finger_curl_*` quanh trục +X. Trục này được đo trên skeleton: gập quanh +X thì đầu ngón cong về +Z, phía lòng bàn tay. Ngón cái xoay quanh X (vắt ngang lòng bàn tay) và Z (gập lên phía súng).
+
+**Đích được tính từ xương tay phải ngay trong frame này**, không đọc `LeftHandGrip.global_position`. Lý do: BoneAttachment3D chỉ cập nhật sau khi các modifier chạy xong, nên vị trí đọc được là của frame trước, và tay trái sẽ trễ 1 frame, rung khi đi. Cách làm:
+- Lúc gán `target`, modifier nhân dồn transform cục bộ từ `LeftHandGrip` lên tới `RightHandAttachment`. Giá trị này cố định.
+- Mỗi frame lấy `pose(RightHand) × giá trị đó`.
+
+**Thao tác:**
+1. Mở `swat_character.tscn` → click root `SwatCharacter` → Inspector nhóm **Weapon** → **Weapon Socket** → **Assign** → chọn `WeaponSocket` → **Ctrl+S**.
+2. Chuột phải `GeneralSkeleton` → **Add Child Node** → gõ `LeftHandIK` → chọn **LeftHandIKModifier** → **Create** → **Ctrl+S**.
+   - Không thấy trong danh sách thì: **Project → Reload Current Project**.
+   - Không thêm node này thì game vẫn chạy (code tự tạo), nhưng không xem được trong editor.
+3. Ngay lập tức tay trái dính vào ốp súng và ngón tay co lại ở khung 3D. Chỉnh trong Inspector theo bảng dưới.
+4. Giá trị chỉnh trong Inspector được lưu vào `swat_character.tscn` khi **Ctrl+S**, không cần sửa file `.gd`.
+
+**Thông số:**
+
+| Ở đâu | Thông số | Mặc định | Ý nghĩa |
+|---|---|---|---|
+| SwatCharacter → Weapon | `weapon_socket` | `WeaponSocket` | Nhân vật tìm `LeftHandGrip` bên trong để làm đích IK (lúc chạy game; sau này đổi súng) |
+| | `left_hand_ik` | bật | Tắt để so sánh với tay trái của animation gốc |
+| LeftHandIKModifier | `contact_bones` | [`LeftIndexProximal`] | Điểm tiếp xúc = trung bình khớp gốc các ngón trong danh sách. Thêm cả 4 ngón (Index, Middle, Ring, Little + `Proximal`) → súng nằm giữa hàng khớp, dịch 3.4 cm về phía ngón út |
+| | `contact_amount` | 0.85 (scene đang dùng 0.95) | 0 = cổ tay, 0.55 ≈ giữa lòng bàn tay, 1 = đúng khớp ngón. Tăng = súng dịch lên phía ngón tay |
+| | `palm_depth` | 0.015 m | Độ dày nửa bàn tay theo +Z (quay vào súng). Tay lún vào ốp thì tăng, hở khỏi ốp thì giảm |
+| → Hand Rotation | `hand_lock` | 1 | 0 = bàn tay xoay theo animation, 1 = khoá theo súng |
+| | `hand_rotation` | (0, 30, 0)° | Xoay bàn tay theo trục súng. **Y**: ngón chĩa về trước / sau. **Z**: lăn quanh nòng (lòng bàn tay nghiêng). **X**: gập cổ tay |
+| → Fingers | `finger_grip` | 1 | 0 = ngón theo animation, 1 = ngón nắm theo các góc dưới |
+| | `finger_curl_base / mid / tip` | 15 / 70 / 45° | Góc gập từng đốt của 4 ngón: gốc (Proximal) / giữa (Intermediate) / đầu (Distal) |
+| | `thumb_across / thumb_bend` | 0 / 0° | Ngón cái: vắt ngang lòng bàn tay / gập lên phía súng |
+
+**Thấy gì thì chỉnh gì:**
+
+| Thấy gì | Chỉnh |
+|---|---|
+| Ốp súng nằm quá sâu / quá nông trong tay | `contact_amount` (tăng = súng dịch về phía ngón) |
+| Tay lún vào ốp / hở khỏi ốp | `palm_depth` |
+| Cổ tay gập gãy | `hand_rotation` Y tăng lên 40–45 (khi đi / ngồi đẹp hơn, nhưng đứng yên bị bẻ nhiều hơn) |
+| Lòng bàn tay nghiêng, không ôm đáy ốp | `hand_rotation` Z ±10–20 |
+| Ngón lơ lửng / chui vào ốp | Tăng / giảm `finger_curl_mid`, `finger_curl_tip` |
+| Gốc ngón nhô ra khỏi ốp | Tăng `finger_curl_base` |
+| Ngón cái chưa ôm thành trái | Tăng `thumb_bend`, hoặc chỉnh `thumb_across` ±20 |
+| Muốn tay đặt ở chỗ khác trên súng | Dời Empty `LeftHandGrip` trong Blender, hoặc dời `WeaponSocket` |
+
+**Kết quả test headless:**
+
+Sai số lớn nhất giữa điểm tiếp xúc và `LeftHandGrip`:
+
+| | idle | đi | sprint | ngồi | ngồi đi | nghiêng E |
+|---|---|---|---|---|---|---|
+| IK tắt | 9.7 cm | 16.6 cm | 17.4 cm | 15.1 cm | 16.5 cm | 9.7 cm |
+| IK bật | 0.0 cm | 0.0 cm | 0.0 cm | 0.0 cm | 0.0 cm | 0.0 cm |
+
+Cổ tay bẻ nhiều nhất theo `hand_rotation` Y (vì thế chọn 30):
+
+| Y | idle | đi | ngồi | ngồi đi |
+|---|---|---|---|---|
+| 20° | 17° | 31° | 49° | 33° |
+| **30°** | **24°** | **20°** | **34°** | **23°** |
+| 45° | 41° | 10° | 16° | 11° |
+| 60° | 58° | 20° | 13° | 19° |
+
+Vị trí đầu ngón so với `LeftHandGrip`. Mặt cắt ốp rộng ±2.4 cm, hai thành bên cao 1–5 cm:
+- Ngón trỏ: (+2.7, 5.1) cm, tỳ thành phải.
+- Ngón út: (+3.8, 4.0) cm, tỳ thành phải.
+- Ngón cái: (−2.8, 4.1) cm, tỳ thành trái.
+- Đầu ngón trôi so với súng: 0 cm ở mọi tư thế.
+
+### 21.4 Xem IK ngay trong editor
+`LeftHandIKModifier` là script `@tool`, nên chạy được cả trong editor:
+- `target` để trống: modifier tự tìm node `LeftHandGrip` dưới skeleton.
+- Trong editor, đích được tính lại mỗi frame. Dời `WeaponSocket` hay kéo thanh trượt trong Inspector là thấy ngay.
+- Lúc chạy game, `humanoid_character.gd` tìm lại node này và dời nó xuống **cuối** danh sách con, để nó chạy sau Twist và Lean (hai modifier này được thêm bằng code). Nếu scene không có node này thì code tự tạo.
+- Twist và Lean **không** chạy trong editor, chỉ IK chạy.
+
+**Xem từng tư thế:**
+- **Cách A, tua từng frame (rõ nhất):** chọn `AnimationTree` → bỏ tick **Active** → chọn `Model/AnimationPlayer` → panel **Animation** → chọn clip (ví dụ `crouch/walk_forward`) → kéo timeline. Xem xong thì tick lại **Active**. Có quên thì cũng không sao, vì `_ready()` luôn bật lại `anim_tree.active = true`.
+- **Cách B, giữ AnimationTree bật:** chọn `AnimationTree` → panel **AnimationTree** → bấm ▶ trên state (Locomotion, Crouch…). Bấm ✏ để mở BlendSpace → chọn công cụ **Set the blending position…** → click để đổi hướng đi.
+- **Phóng to tay:** chọn node trong cây Scene → **F** để camera nhảy tới.
+
+⚠ Trong Godot 4.5, `Skeleton3D.get_bone_global_pose()` gọi **ngoài** modifier trả về tư thế **trước** modifier. Muốn đo tư thế cuối cùng (sau twist / lean / IK) thì đọc qua một `BoneAttachment3D`.
+
+### 21.5 Hướng nâng cấp
+| Cách | Làm gì | Khi nào |
+|---|---|---|
+| Súng theo thân, IK 2 tay | Súng gắn vào ngực, luôn chĩa đúng hướng ngắm; cả 2 tay IK vào `RightHandGrip` / `LeftHandGrip` | **Nên làm tiếp**, trước bước bắn hitscan: hiện nòng chĩa theo tay phải của animation (lúc idle chúc xuống chéo trái) |
+| Animation thân trên riêng | Clip Mixamo rifle aiming, trộn cho Spine trở lên bằng filter trong AnimationTree | Để vai / khuỷu ra dáng cầm súng, IK chỉ phải sửa ít |
+| Hand pose làm sẵn | 1 frame tư thế nắm dựng trong Blender, áp lên xương ngón thay cho các góc `finger_curl_*` | Khi cần tay đẹp hơn, hoặc nhiều loại súng |
+| Ngón tự ôm theo collision | Raycast từng đốt ngón | Không khuyên: camera top-down nhìn không ra khác biệt |
+
 ---
+
 
 ## Git và LFS
 
@@ -1354,7 +1530,7 @@ Blender tạo file `.blend1` mỗi lần lưu đè. Quy tắc LFS `*.blend` khô
 | 1 | Pipeline animation: idle, walk 8 hướng, sprint 8 hướng, turn trái/phải, In Place + đưa về tâm, 1 BoneMap, library `locomotion`, script Blender (batch import) | ✅ |
 | 2 | Scene nhân vật: `swat_character.tscn`, AnimationTree (BlendSpace2D), `humanoid_character.gd`, scene test | ✅ |
 | 3 | Điều khiển người chơi: ngắm theo chuột, camera đi theo, WASD theo camera, xoay thân trên (`SpineTwistModifier`), xoay tại chỗ theo Spine (Turn 90/180, BlendSpace1D `TurnInPlace`, curve góc Spine), sprint 8 hướng (Shift), camera mượt (Physics Interpolation), ngồi (C: idle, đi 8 hướng, xoay 90/180, library `crouch`), nghiêng người (Q / E, `LeanModifier`) | ✅ |
-| 4 | Vũ khí: model súng (SCAR-L đã kiểm tra, cần chuẩn hoá), gắn vào tay (`BoneAttachment3D`), `WeaponData`, bắn hitscan, nạp đạn, hiệu ứng | ⏸ Tạm hoãn |
+| 4 | Vũ khí: model SCAR-L chuẩn hoá ✅, gắn vào tay (`BoneAttachment3D`) ✅, IK tay trái + ngón tay nắm súng (`LeftHandIKModifier`, xem trước trong editor) ✅, súng theo thân + IK 2 tay, `WeaponData`, bắn hitscan, nạp đạn, hiệu ứng | 🔄 Đang làm |
 | 5 | Chiến đấu: máu, hitbox/hurtbox, animation thân trên (bắn, nạp đạn, trúng đạn, chết) | ⬜ |
 | 6 | Kẻ địch: Navigation, AI (dùng lại `HumanoidCharacter`, chỉ thay controller) | ⬜ |
 | 7 | Vòng lặp game: wave, HUD, menu | ⬜ |
