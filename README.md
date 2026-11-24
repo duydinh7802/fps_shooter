@@ -81,11 +81,21 @@ assets/characters/
     ├── locomotion.tres                      ← AnimationLibrary: idle, walk 8 hướng, sprint 8 hướng, turn 90/180
     └── crouch.tres                          ← AnimationLibrary: idle, walk 8 hướng, turn 90/180 khi ngồi (Bước 19)
 assets/weapons/source/scar_l.blend            ← súng SCAR-L đã chuẩn hoá: mét, nòng +Y, gốc ở báng cầm (Bước 21)
+assets/effects/
+├── muzzle_flash/textures/
+│   ├── muzzle_side.png, muzzle_front.png      ← lửa đầu nòng, 1 khung (từ EXR FX Elements, Bước 23)
+│   ├── smoke_side/0001…0010.png               ← chuỗi khói side 512×256
+│   └── smoke_front/0001,0003…0039.png         ← chuỗi khói front 256×256
+└── shaders/smoke_flipbook.gdshader           ← khói: trộn 2 khung (frame blending), billboard
+data/weapons/scar_l.tres                      ← WeaponData của SCAR-L (Bước 22)
 scenes/
 ├── characters/swat/
 │   ├── swat_model.tscn                       ← model SWAT + AnimationPlayer (kho animation)
 │   └── swat_character.tscn                   ← nhân vật hoàn chỉnh: thân, collision, AnimationTree
-├── weapons/scar_l.tscn                       ← scene súng (kế thừa scar_l.blend), sau này gắn script súng
+├── weapons/scar_l.tscn                       ← scene súng (kế thừa scar_l.blend) + weapon.gd + MuzzleFlash ở Muzzle
+├── effects/
+│   ├── muzzle_flash.tscn                     ← lửa: 2 tấm side xếp chéo + front billboard + đèn (Bước 23)
+│   └── muzzle_smoke.tscn                     ← một đám khói, tạo mới mỗi phát, thả vào thế giới (Bước 23)
 ├── player/player.tscn                        ← người chơi: SwatCharacter + controller + camera
 └── tests/
     ├── test_character.tscn                   ← test di chuyển (Giai đoạn 2)
@@ -96,6 +106,12 @@ scripts/
 │   ├── spine_twist_modifier.gd               ← xoay thân trên theo hướng ngắm
 │   ├── lean_modifier.gd                      ← nghiêng nửa thân trên theo hướng màn hình khi giữ Q / E (Bước 20)
 │   └── left_hand_ik_modifier.gd              ← (@tool) IK tay trái bám ốp súng + ngón tay nắm (Bước 21)
+├── weapons/
+│   ├── weapon_data.gd                        ← Resource thông số súng (Bước 22)
+│   └── weapon.gd                             ← bóp cò, nhịp bắn, hitscan, signal fired (Bước 22)
+├── effects/
+│   ├── muzzle_flash.gd                       ← (@tool) chớp lửa mỗi phát + nhả khói (Bước 23)
+│   └── muzzle_smoke.gd                       ← chuỗi khói: chọn khung, trôi, nở, tan, tự huỷ (Bước 23)
 ├── player/player_controller.gd               ← đọc WASD + chuột, ra lệnh cho nhân vật
 ├── camera/top_down_camera.gd                 ← camera bám theo nhân vật
 └── tests/test_character_driver.gd            ← đọc WASD cho scene test cũ
@@ -1403,6 +1419,295 @@ Vị trí đầu ngón so với `LeftHandGrip`. Mặt cắt ốp rộng ±2.4 cm
 ---
 
 
+## Bước 22: Bắn súng – `WeaponData` + hitscan (D1, D2)
+
+Kết quả của bước này: giữ **chuột trái** thì súng bắn khoảng 10 phát/giây và trừ đạn. Mỗi phát có một tia debug: **đỏ** nếu trúng vật, **vàng** nếu trượt. Đang sprint thì không bắn được.
+
+### 22.1 Kiến trúc
+```
+PlayerController ──(chuột trái, điểm ngắm)──► HumanoidCharacter ──(trigger, aim_point, can_fire)──► Weapon
+  đọc input                                    cấm bắn khi sprint                                 đọc WeaponData (.tres)
+                                                                                                   raycast từ Muzzle
+                                                                                                   signal fired / ammo_changed
+```
+- Nguyên tắc giống phần di chuyển: **súng và nhân vật không đọc bàn phím**. Sau này AI kẻ địch chỉ cần gán `trigger` / `aim_point`.
+- Thứ tự chạy mỗi frame do cây node quyết định: Godot chạy `_physics_process` từ node cha xuống node con. Cây là `Player` (controller) → `SwatCharacter` → … → `scar_l` (Weapon). Vì vậy input được đọc trước, súng bắn sau.
+- Các bước sau (sát thương, hiệu ứng, HUD) chỉ cần nghe signal `fired(from, to, collider)` và `ammo_changed(ammo, reserve)`. Không phải sửa `weapon.gd`.
+
+### 22.2 D1: dữ liệu súng (`WeaponData`)
+`scripts/weapons/weapon_data.gd` là một **Resource**: dữ liệu lưu thành file `.tres`, giống `Curve` hay `Material`. Thêm súng mới thì tạo thêm file `.tres`, không phải sửa code.
+
+| Thông số | SCAR-L (`data/weapons/scar_l.tres`) | Ý nghĩa |
+|---|---|---|
+| `display_name` | SCAR-L | Tên hiện trên HUD |
+| `fire_mode` | AUTO | SEMI: mỗi lần bấm 1 phát / AUTO: giữ cò bắn liên tục / BURST: mỗi lần bấm 1 loạt |
+| `fire_rate` | 600 | phát / phút (0.1 s / phát) |
+| `burst_count` | 3 | Số phát mỗi loạt (BURST) |
+| `damage` | 25 | Dùng ở D3 |
+| `max_range` | 60 m | Tầm tia bắn. Đặt tên `max_range` vì `range` là hàm có sẵn của GDScript |
+| `magazine_size` / `reserve_ammo` / `reload_time` | 30 / 90 / 2.5 s | Dùng ở D7 (nạp đạn) |
+| `spread` | 0° | Dùng ở D6 (toả đạn) |
+
+**Thao tác:** FileSystem → chuột phải `data/weapons` → **New → Resource…** → `WeaponData` → lưu `scar_l.tres` → đặt Display Name.
+
+### 22.3 D2: bóp cò và hitscan (`Weapon`)
+`scripts/weapons/weapon.gd` gắn vào root `scenes/weapons/scar_l.tscn`, Data = `scar_l.tres`.
+
+| Phần | Logic |
+|---|---|
+| Nhịp bắn | `_cooldown` trừ dần theo `delta`. Mỗi phát **cộng thêm** `60 / fire_rate` chứ không gán lại, để phần lẻ không mất và súng bắn đúng 600 phát/phút dù FPS dao động. Khi không bắn, `_cooldown` không âm (không "để dành" phát) |
+| SEMI / BURST | `_burst_left` = số phát còn nợ, chỉ nạp lúc vừa nhấn cò (`just_pressed`) |
+| Hướng bắn | Con trỏ **đè lên vật** (cao hơn chân > 0.25 m): bắn thẳng vào điểm đó. Con trỏ chỉ **sàn trống**: bắn **ngang** ở độ cao nòng. Con trỏ **sát người**: bắn theo hướng nhân vật quay mặt |
+| Chống xuyên tường | Trước tiên bắn tia ngắn từ giữa người (cùng độ cao nòng) → nòng. Trúng tường thì đạn dừng ở đó |
+| Bỏ qua thân mình | `exclude` = RID của `owner_body` (nhân vật gán trong `_ready`) |
+| Debug | Tia đỏ / vàng + dấu + ở điểm cuối, hiện 0.1 s. Tắt bằng `show_debug` |
+
+**`player_controller.gd`:**
+- `character.trigger = Input.is_action_pressed("shoot")`. Action `shoot` (chuột trái) có sẵn.
+- Hàm `_update_aim_target()`: tia từ camera qua chuột quét layer world + enemy. Trúng vật cao hơn chân `target_min_height` thì `aim_at_point = true`, ngược lại dùng điểm trên mặt phẳng ngắm.
+
+**`humanoid_character.gd`:**
+- Biến mới `trigger`, `aim_point`, `aim_at_point`, `weapon`.
+- Trong `_ready`: tìm `Weapon` trong `weapon_socket`, gán `owner_body = self`.
+- Hàm `_update_weapon()`: `can_fire = not sprinting`, truyền lệnh cho súng.
+- Debug label có thêm dòng `ammo 27/30` (hiện `(sprint)` khi bị cấm bắn).
+
+### 22.4 Collision layer
+**Project Settings → Layer Names → 3D Physics** (cần bật Advanced Settings):
+
+| Layer | Tên | Ai ở đó |
+|---|---|---|
+| 1 | `world` | Sàn, tường, hộp |
+| 2 | `player` | Nhân vật người chơi |
+| 3 | `enemy` | Kẻ địch, hình nộm (D3) |
+
+`SwatCharacter`: **Layer = 2**, **Mask = 1 + 3**. Nếu để nhân vật ở layer 1 (cùng sàn), tia ngắm từ camera sẽ trúng chính nhân vật. Tia đạn và tia ngắm quét **1 + 3** (`0b101`).
+
+### 22.5 Test
+Test headless (bản sao `Weapon` trong scene dựng bằng code, và scene `test_player.tscn` thật):
+
+| Test | Kết quả |
+|---|---|
+| AUTO, giữ cò 1 giây | **10 phát**, đạn 30 → 20 |
+| SEMI, bấm 3 lần / BURST, giữ 1 giây | 3 phát / 3 phát (1 loạt) |
+| Con trỏ sát người | Bắn theo hướng quay mặt |
+| Nòng thò qua tường | Đạn dừng ở tường |
+| Giữ cò tới hết đạn | Dừng ở 0 |
+| Sprint + bắn (scene thật) | 0 phát, label `ammo 20/30  (sprint)` |
+
+F6 `test_player.tscn`: thêm vài `CSGBox3D` (Use Collision ✓) để bắn thử. Tia đỏ dừng ở mặt hộp. Ngồi (C) thì tia bay thấp hơn.
+
+---
+
+## Bước 23: Lửa đầu nòng + khói từ VFX EXR (D4.2)
+
+Kết quả của bước này: mỗi phát bắn, **lửa** chớp 0.05 s ở đầu nòng, kèm đèn cam hắt lên sàn. Mỗi phát cũng nhả một **làn khói** xám ở lại chỗ bắn, bay lên và tan trong khoảng 0.8 s. Bắn liên tục thì khói dày dần.
+
+### 23.1 Nguồn VFX và license
+| | |
+|---|---|
+| Gói | FX Elements: *Muzzle Flash – Side – 001* và *Muzzle Flash – Front – 001* (bản EXR) |
+| Định dạng | Chuỗi OpenEXR 4096×2304, RGBA, float (HDR), hệ màu **ACEScg**, **24 khung/giây** (đọc từ header EXR) |
+| Bản ProRes | Không dùng: Godot không phát ProRes, và video không hợp cho hiệu ứng 3D |
+| License | Cho phép dùng trong video game, nhưng nội dung phải nằm trong tác phẩm mới và **không được để trích xuất / chia sẻ thành file riêng**. Cấm bán lại, chia sẻ file gốc hoặc file đã chỉnh |
+
+⚠ **Quy tắc cho repo này:**
+- **Không** đưa file EXR gốc vào project hay git. Để chúng ngoài project (ví dụ `Downloads\` hoặc `Documents\vfx_work\`).
+- PNG đã chuyển đổi nằm trong `assets/effects/muzzle_flash/textures/`. Chỉ push lên repo **private**.
+- Trước khi phát hành game, hỏi FX Elements về việc dùng làm texture trong game. Ghi công "VFX Stock Footage provided by FX Elements".
+
+**Trong chuỗi EXR có gì** (đo bằng script Blender):
+
+| | Khung lửa | Phần còn lại |
+|---|---|---|
+| Side (56 khung) | **Chỉ khung 1001** (sáng tối đa 28, màu cam). Đầu nòng ở bên phải ảnh, khoảng (3560, 1160) | Khói xám 1002–1010 (sáng 0.39 → 0.02, alpha 0.58 → 0.05). Từ 1034 trở đi đen hoàn toàn |
+| Front (66 khung) | **Chỉ khung 1001** (sáng tối đa 5.4). Quả cầu lửa tâm khoảng (2055, 1130) | Khói nở dần, đậm nhất ở 1020–1040, tan hết ở khoảng 1060 (2.5 s) |
+
+Ngoài đời, lửa đầu nòng chỉ loé chưa tới 1/24 giây, nên camera quay được đúng 1 khung. **Lửa không có animation, chỉ khói có.**
+
+### 23.2 Vì sao tách lửa và khói
+| | Lửa | Khói |
+|---|---|---|
+| Blend | **Add** (cộng sáng) | **Mix** (che bớt nền) |
+| Exposure khi xuất | âm (−1.5 / −0.5) | dương (+1 / +2) |
+| Đi theo súng | **Có** (con của `Muzzle`) | **Không**: thả vào thế giới, ở lại chỗ bắn |
+| Thời gian | 0.05 s | khoảng 0.8 s |
+| Bắn liên tục 10 phát/giây | Chớp lại mỗi phát | Mỗi phát một đám riêng, chồng lên nhau, dày dần |
+| Độ phân giải | 1 ảnh nét (1024×512) | Nhiều khung mờ, cỡ nhỏ là đủ |
+
+Gộp chung thành một chuỗi thì khói sẽ **quét theo nòng** khi xoay chuột hoặc nghiêng, và bị **cắt cụt** mỗi khi phát mới bắt đầu lại chuỗi.
+
+### 23.3 Blender: chuyển EXR → PNG (Compositor)
+Cùng một chuỗi node cho cả 4 lần xuất: **Image → Crop → Scale → Group Output** (+ **Viewer** để xem trên Backdrop).
+
+**Thiết lập chung:**
+1. **File → New → General**. **Giữ Camera**: Blender cần camera thì mới Render được.
+2. **Properties → Render**:
+   - Render Engine = **Workbench** (nhanh nhất, ta chỉ dùng compositor).
+   - **Color Management**: View Transform **Standard**, Look **None**. AgX / Filmic làm đổi màu lửa.
+3. Tab **Compositing** → **New** (hoặc tick Use Nodes) → xoá node Render Layers.
+4. **Shift+A → Input → Image** → **Open** file EXR.
+   - Trong hộp thoại Open, bấm bánh răng → **bỏ tick UDIM Tiles**. Nếu không, Blender hiểu đuôi `1001` là số ô UDIM và tên ảnh thành `…<UDIM>.exr`.
+   - Trên node: **Color Space = ACEScg**. Mỗi lần mở file khác, Blender trả về Linear Rec.709, nên phải **chọn lại**.
+5. **Shift+A → Transform → Crop** (Y đo **từ dưới lên**) → **Shift+A → Transform → Scale** (**Render Size + Fit**) → nối vào Group Output và Viewer. Bật **Backdrop** ở góc phải trên khung node.
+
+**Chuỗi ảnh (Image Sequence):** trên node Image → **N** → tab Node: Source **Image Sequence**, **Frames**, **Start Frame**, **Offset**.
+
+> **Số file = (khung timeline − Start Frame + 1) + Offset**
+>
+> Start Frame là khung timeline mà chuỗi **bắt đầu phát**. Đặt Start 1001 trong khi timeline ở khung 1 thì node chưa có hình và **Backdrop trống**. Luôn đặt **Start = 1** và dùng Offset để chọn file.
+
+**4 lần xuất:**
+
+| | Lửa side | Lửa front | Khói side | Khói front |
+|---|---|---|---|---|
+| File `.blend` làm việc (ngoài project) | `muzzle_side.blend` | (như lửa side, đổi ảnh) | `muzzle_side_smoke.blend` | `muzzle_front_smoke.blend` |
+| File EXR | side 1001 | front 1001 | side 1002 → 1020 | front 1002 → 1040 |
+| Frames / Start / Offset | 1 / 1 / 1000 | 1 / 1 / 1000 | **19 / 1 / 1001** | **39 / 1 / 1001** |
+| Crop X / Y / W / H | 1220 / 544 / 2400 / 1200 | 1705 / 824 / 700 / 700 | **giống lửa side** | 1555 / 674 / 1000 / 1000 |
+| Resolution (Output, 100%) | 1024 × 512 | 512 × 512 | 512 × 256 | 256 × 256 |
+| Frame Range / Step | – (F12) | – (F12) | 1 → 19 / 1 | 1 → 39 / **2** |
+| Exposure (Render → Color Management) | **−1.5** | **−0.5** | **+1.0** | **+2.0** |
+| Xuất | F12 → Image → Save As | F12 → Save As | **Ctrl+F12** (Render Animation) | Ctrl+F12 |
+| Kết quả | `muzzle_side.png` | `muzzle_front.png` | `smoke_side/0001…0019` (giữ 0001–0010) | `smoke_front/0001, 0003 … 0039` (20 file) |
+
+Định dạng lưu: **PNG, RGBA, 8 bit**. Khói bắt buộc có alpha. Lửa lưu RGBA cũng được: alpha có sẵn trong EXR làm mờ phần khói lợn cợn quanh lửa.
+
+**Giải thích các con số:**
+- **Crop lửa side:** khung 2:1, **mép phải sát đầu nòng**, **đầu nòng đúng giữa chiều cao**. Kết quả đo: đầu nòng ở x = 997/1024, y = 256/512. Khói side dùng **cùng Crop** để khớp vị trí đầu nòng.
+- **Crop khói front to hơn lửa front** (1000 thay vì 700), cùng tâm: đám khói nở rộng tới khoảng 870 px.
+- **Exposure lửa âm:** màu trung bình của lửa side là (3.2, 1.7, 0.9), vượt 1. Không giảm thì cả vùng bị cắt thành trắng, mất màu cam. Godot bù lại độ sáng bằng Blend Add + Glow.
+- **Exposure khói dương:** khói gốc rất tối (0.02–0.18). Không cần keyframe: alpha trong EXR đã lo phần tan dần.
+- **Step 2 cho khói front:** chỉ render khung 1, 3, 5 … nên chuỗi nhanh gấp đôi (0.83 s thay vì 1.6 s). Tên file giữ số khung gốc.
+- **Khói side chỉ giữ 0001–0010:** từ 0011 trở đi alpha ≤ 0.05, trong suốt hoàn toàn.
+- **Không cần số khung lớn hơn:** footage chỉ có 24 khung/giây thật. Phát nhanh hơn không làm mượt hơn, chỉ ngắn lại. Độ mượt do frame blending trong shader lo (23.5).
+
+**Bẫy Output path:**
+- Ô đường dẫn **không được kết thúc bằng `\`**. Đúng: `...\textures\smoke_side\` (thư mục, file ra `0001.png`) hoặc `...\smoke_side\smoke_side_` (tiền tố).
+- Viết `...\smoke_side_\` thì Blender tạo thêm thư mục con `smoke_side_`.
+
+**Kiểm tra sau khi xuất:**
+- Mép ảnh tối (alpha ≈ 0). Nếu mép còn sáng thì trong game sẽ thấy khung chữ nhật.
+- Lửa side: đầu nòng sát mép phải, ở giữa chiều cao.
+- Lửa front: nằm giữa khung.
+- Khói front: không chạm mép. Chạm nhẹ (alpha < 0.05) ở mấy khung cuối thì chấp nhận được, vì script làm mờ dần.
+
+### 23.4 Import trong Godot
+Chọn nhiều file cùng lúc (Shift+click) → tab **Import** → đổi 1 lần → **Reimport (N)**:
+
+| Mục | Giá trị | Lý do |
+|---|---|---|
+| Compress → Mode | **Lossless** | Nén VRAM làm vùng tối chuyển màu bị vỡ khối |
+| Mipmaps → Generate | **Bật** | Camera top-down nhìn xa, không có mipmaps thì lấp lánh |
+| Detect 3D → Compress To | **Disabled** | Để Godot không tự đổi sang nén VRAM |
+
+Bộ nhớ: lửa khoảng 2.8 MB + 0.7 MB, khói side khoảng 7 MB, khói front khoảng 7 MB (đã gồm mipmaps).
+
+⚠ **Đổi tên / di chuyển file thì làm trong Godot** (F2, kéo thả), không làm trong Explorer. Nếu sau đó F6 báo `[ext_resource] referenced non-existent resource` với **tên cũ**, nghĩa là bảng UID trên đĩa (`.godot/uid_cache.bin`) bị cũ. Sửa bằng **Project → Reload Current Project**.
+
+### 23.5 Scene và script
+```
+scenes/effects/muzzle_flash.tscn            (con của ScarL/Muzzle trong scar_l.tscn, script muzzle_flash.gd)
+MuzzleFlash (Node3D)
+├── SideA  (MeshInstance3D, PlaneMesh 0.6×0.3, Center Offset (−0.284,0,0), Rotation (0,−90,0))
+├── SideB  (Ctrl+D từ SideA, Rotation (90,−90,0))         ← 2 tấm xếp chéo thành chữ + quanh nòng
+├── Front  (QuadMesh 0.3×0.3, Position (0,0,−0.04), material Billboard)
+└── Light  (OmniLight3D, Position (0,0,−0.15), màu ff9940, Energy 4, Range 3, không bóng)
+
+scenes/effects/muzzle_smoke.tscn            (được tạo mới mỗi phát, thả vào thế giới, script muzzle_smoke.gd)
+MuzzleSmoke (Node3D)
+├── SideA  (PlaneMesh 0.6×0.3, Center Offset (−0.284,0,0), Rotation (0,−90,0))
+├── SideB  (Ctrl+D, Rotation (90,−90,0))
+└── Front  (QuadMesh 0.43×0.43, Position (0,0,−0.04))
+```
+
+**Hình học:**
+- **Center Offset −0.284:** đầu nòng trong ảnh ở 97.4% chiều rộng, tức (0.974 − 0.5) × 0.6 = 0.284 m tính từ tâm tấm. Dịch tấm để điểm đó trùng `Muzzle`.
+- **Rotation (0, −90, 0):** quay mép phải của ảnh (đầu nòng) về phía sau, để lửa phụt về **−Z**.
+- Đo lại sau khi dựng: điểm đầu nòng của cả 2 tấm ở (0, 0, 0), đầu lửa ở (0, 0, −0.584).
+- **Front dùng Billboard:** camera nhìn từ trên xuống, tấm đứng vuông góc nòng sẽ bị nhìn từ cạnh.
+- **Khói front 0.43 m** = 0.3 × 1000/700 (Crop to hơn).
+
+**Material:**
+
+| | Lửa (`StandardMaterial3D`, gán trong mesh) | Khói (`ShaderMaterial` `smoke_flipbook.gdshader`, gán ở **Material Override**) |
+|---|---|---|
+| Blend | Transparency Alpha + **Blend Add** | `blend_mix` |
+| Shading | Unshaded | `unshaded` |
+| Cull | Disabled | `cull_disabled` |
+| Đặc biệt | – | **Local to Scene ✓**. Front: tham số `billboard` ✓ |
+
+**Vì sao khói cần Local to Scene + Material Override:**
+- Nhiều đám khói cùng tồn tại, mỗi đám ở một khung khác nhau, nên mỗi đám cần material riêng.
+- Local to Scene nhân bản material mỗi lần tạo scene, nhưng **chỉ khi node dùng trực tiếp** (Material Override). Nếu material nằm trong PlaneMesh thì mọi đám nhảy khung giống hệt nhau.
+
+**`assets/effects/shaders/smoke_flipbook.gdshader`:**
+- `StandardMaterial3D` chỉ có 1 ô ảnh. Shader này nhận **2 khung** (`frame_a`, `frame_b`) rồi `mix` theo `blend`, gọi là **frame blending**. Chuỗi 24 khung/giây nhờ vậy mượt khi game chạy 60 FPS.
+- Thêm `opacity`, `tint`, và chế độ `billboard` (code giống Billboard Keep Scale của StandardMaterial3D).
+
+**`scripts/effects/muzzle_flash.gd`** (`@tool`, class `MuzzleFlash`):
+
+| Phần | Logic |
+|---|---|
+| Nối súng | `_find_weapon()` đi ngược cây node tới `Weapon`, rồi `fired.connect(...)`. Không cần gán tay |
+| `flash()` | `Basis(Vector3.BACK, roll) * Basis.from_scale(...)`: xoay ngẫu nhiên quanh nòng (Z), lật gương (scale −1), to/nhỏ ±20%, dài/ngắn ±25%. Chỉ 1 ảnh mà mỗi phát một khác |
+| Mờ dần | Hiển thị **trước** rồi mới trừ thời gian, nên frame đầu luôn 100%. Ở 60 FPS: **100% → 67% → 33% → tắt**. Dùng `GeometryInstance3D.transparency` nên không sửa material dùng chung. Đèn giảm cùng tỉ lệ |
+| Trong editor | `_ready` dừng sớm nếu `Engine.is_editor_hint()`: lửa luôn hiện để chỉnh. Nút **Flash thử** (`@export_tool_button`) để xem trước. Sau khi chớp, transform trả về gốc nên scene không bị lưu giá trị ngẫu nhiên |
+| Khói | `_spawn_smoke()`: mỗi `smoke_every` phát, `instantiate` khói, `add_child` vào **`current_scene`** (không phải súng), chép `global_transform` của `Muzzle` lúc bắn + xoay ngẫu nhiên quanh nòng |
+
+**`scripts/effects/muzzle_smoke.gd`** (class `MuzzleSmoke`):
+
+| Phần | Logic |
+|---|---|
+| Chọn khung | `f = t × fps`. Hiện khung `floor(f)` trộn với khung kế theo phần lẻ. Ví dụ t = 0.1 s → f = 2.4 → khung 2 + 3, blend 0.4 |
+| Hai chuỗi dài khác nhau | Đám khói sống bằng chuỗi dài nhất (front 20 khung = 0.83 s). Side chạy hết (10 khung = 0.42 s) thì `opacity = 0` |
+| Trôi, nở, tan | Bay lên `rise_speed`, trôi ngang ngẫu nhiên `drift_speed`, to thêm `grow` (80%), mờ dần bằng `smoothstep` từ `fade_start` (60% đời). Phần mờ dần cũng che chỗ khói front chạm mép ảnh |
+| Tự huỷ | `queue_free()` khi hết đời |
+
+### 23.6 Thông số để chỉnh
+| Ở đâu | Thông số | Mặc định | Ý nghĩa |
+|---|---|---|---|
+| `scar_l.tscn` → `ScarL/Muzzle/MuzzleFlash` | `duration` | 0.05 s | Lửa sáng bao lâu |
+| | `scale_jitter` / `length_jitter` | 0.2 / 0.25 | Độ to/nhỏ, dài/ngắn ngẫu nhiên |
+| | `random_roll` / `random_flip` | bật | Xoay quanh nòng / lật gương |
+| | `smoke_scene` | `muzzle_smoke.tscn` | Để trống = không có khói |
+| | `smoke_every` | 1 | Bắn liên tục khói đặc quá thì tăng lên 2–3 |
+| `muzzle_flash.tscn` → Light | Energy / Range | 4 / 3 m | Độ sáng / tầm hắt của chớp sáng |
+| `muzzle_smoke.tscn` root | `fps` | 24 | Giảm (18) để khói sống lâu hơn |
+| | `opacity` | 1.0 | Độ đậm |
+| | `rise_speed` / `drift_speed` | 0.25 / 0.1 m/s | Bay lên / trôi ngang |
+| | `grow` | 0.8 | Cuối đời to thêm 80% |
+| | `fade_start` | 0.6 | Bắt đầu mờ từ 60% đời |
+| | `frame_blending` | bật | Tắt để so sánh (khói giật từng nấc) |
+| Material khói → Shader Parameters | `tint` | trắng | Khói quá sáng ở chỗ tối thì chọn xám hơn |
+
+### 23.7 Kiểm tra
+Test headless + chụp màn hình game thật:
+
+| Test | Kết quả |
+|---|---|
+| Hình học lửa (đo bằng script) | Đầu nòng trong ảnh ở đúng (0, 0, 0), lửa phụt tới (0, 0, −0.584). SideA nằm ngang, SideB đứng |
+| Nhịp lửa ở 60 FPS | 100% → 67% → 33% → tắt, đèn 4.0 → 2.7 → 1.3 → 0. Sau đó transform / đèn / độ mờ trả về gốc |
+| Bắn 6 phát (scene thật) | Lửa hiện ở 46/76 frame. Tạo **6 đám khói** |
+| Khói | Mỗi đám một material riêng. Dời súng đi chỗ khác thì khói ở lại, chỉ bay lên khoảng 5 cm. Hết vòng đời thì tự huỷ |
+| Shader | Biên dịch không lỗi (Vulkan, Forward+) |
+
+⚠ **Sàn scene test phải tối.**
+- `CSGBox3D` mặc định màu **trắng**. Lửa dùng **Add** (cộng sáng), mà trắng cộng sáng vẫn là trắng, nên trên sàn trắng **gần như không thấy lửa**. Đèn của lửa còn làm sàn thành một vòng trắng lóa.
+- Ảnh chụp so sánh: sàn trắng thì lửa gần như vô hình, sàn xám `383838` thì lửa cam rõ, quầng cam hắt lên sàn.
+- Sửa: `test_player.tscn` → `Floor` → Material → Albedo Color = **`383838`**. Tuỳ chọn: WorldEnvironment → Tonemap = **AgX**.
+
+| Thao tác (F6) | Mong đợi |
+|---|---|
+| Bắn 1 phát | Lửa chớp, làn khói xám phụt ra trước nòng, nở to, bay lên, tan trong khoảng 0.8 s |
+| Giữ chuột trái | Lửa chớp khoảng 10 lần/giây, mỗi lần một hình. Khói dày dần |
+| Vừa bắn vừa xoay / chạy | Khói ở lại chỗ cũ, không quét theo nòng |
+
+**Đã biết:** lúc đứng yên, lửa phụt theo **nòng súng** (clip idle cầm súng chúc chéo), còn tia đạn đi theo **hướng chuột**. Sẽ hết khi làm **D5** (tư thế giương súng).
+
+---
+
+
 ## Git và LFS
 
 ### `.gitattributes`
@@ -1520,6 +1825,22 @@ Blender tạo file `.blend1` mỗi lần lưu đè. Quy tắc LFS `*.blend` khô
 | Đi khi ngồi bị trượt chân | `crouch_speed` khác tốc độ clip | Đặt 1.95 m/s (đo được 1.96) |
 | Chuyển idle ↔ đi thấy người nhô lên | Clip idle và walk khác độ cao hông | Xem 19.7 |
 
+
+### Vũ khí và hiệu ứng
+| Triệu chứng | Nguyên nhân | Cách sửa |
+|---|---|---|
+| Label hiện `no weapon` | Chưa gắn `weapon.gd` vào root `scar_l.tscn`, hoặc chưa gán Weapon Socket | 22.3, 21.3 |
+| Godot báo `Weapon` / `WeaponData` / `MuzzleFlash` not declared | Chưa quét class mới | Chuyển sang cửa sổ Godot, hoặc Project → Reload Current Project |
+| Tia ngắm / đạn trúng chính nhân vật | Nhân vật ở layer 1 cùng sàn | `SwatCharacter`: Layer 2, Mask 1 + 3 (22.4) |
+| Không thấy lửa khi bắn dù lửa có chạy | Sàn trắng: Blend Add cộng sáng lên nền trắng thì vẫn trắng | Sàn tối `383838` (23.7) |
+| Lửa luôn hiện, không chớp | Scene lửa chưa gắn `muzzle_flash.gd`, hoặc không nằm dưới node Weapon | 23.5. Output có cảnh báo `không nằm dưới node Weapon nào` |
+| F6 báo `referenced non-existent resource` với tên file cũ | Đổi tên file, bảng UID trên đĩa còn tên cũ | Project → Reload Current Project (23.4) |
+| Mọi đám khói nhảy khung giống nhau | Material khói chưa Local to Scene, hoặc gán trong PlaneMesh | Gán ở Material Override + Local to Scene (23.5) |
+| Backdrop Compositor trống khi đọc chuỗi EXR | Start Frame = 1001 trong khi timeline ở khung 1 | Start 1, Offset 1000 (23.3) |
+| Tên ảnh trong Blender thành `…<UDIM>.exr` | Blender hiểu đuôi 1001 là số ô UDIM | Bỏ tick UDIM Tiles trong hộp thoại Open (23.3) |
+| Màu lửa / khói xuất ra bị lệch | Color Space của node Image là Linear Rec.709 | Đặt **ACEScg** (chọn lại mỗi lần mở file) |
+| Render Animation tạo thêm thư mục con `smoke_side_` | Output path kết thúc bằng `\` | Bỏ dấu `\` ở cuối, hoặc dùng tiền tố tên file (23.3) |
+
 ---
 
 ## Lộ trình
@@ -1530,7 +1851,7 @@ Blender tạo file `.blend1` mỗi lần lưu đè. Quy tắc LFS `*.blend` khô
 | 1 | Pipeline animation: idle, walk 8 hướng, sprint 8 hướng, turn trái/phải, In Place + đưa về tâm, 1 BoneMap, library `locomotion`, script Blender (batch import) | ✅ |
 | 2 | Scene nhân vật: `swat_character.tscn`, AnimationTree (BlendSpace2D), `humanoid_character.gd`, scene test | ✅ |
 | 3 | Điều khiển người chơi: ngắm theo chuột, camera đi theo, WASD theo camera, xoay thân trên (`SpineTwistModifier`), xoay tại chỗ theo Spine (Turn 90/180, BlendSpace1D `TurnInPlace`, curve góc Spine), sprint 8 hướng (Shift), camera mượt (Physics Interpolation), ngồi (C: idle, đi 8 hướng, xoay 90/180, library `crouch`), nghiêng người (Q / E, `LeanModifier`) | ✅ |
-| 4 | Vũ khí: model SCAR-L chuẩn hoá ✅, gắn vào tay (`BoneAttachment3D`) ✅, IK tay trái + ngón tay nắm súng (`LeftHandIKModifier`, xem trước trong editor) ✅, súng theo thân + IK 2 tay, `WeaponData`, bắn hitscan, nạp đạn, hiệu ứng | 🔄 Đang làm |
+| 4 | Vũ khí: model SCAR-L chuẩn hoá ✅, gắn vào tay (`BoneAttachment3D`) ✅, IK tay trái + ngón tay nắm súng (`LeftHandIKModifier`, xem trước trong editor) ✅, `WeaponData` + bắn hitscan (D1–D2) ✅, lửa đầu nòng + khói từ VFX EXR (D4.2) ✅, signal normal / dry fire (D4.1), vệt đạn, tia lửa chỗ trúng, âm thanh, rung camera, tâm ngắm (D4.3–D4.7), mục tiêu + sát thương (D3), tư thế giương súng (D5), toả đạn / giật (D6), nạp đạn (D7) | 🔄 Đang làm |
 | 5 | Chiến đấu: máu, hitbox/hurtbox, animation thân trên (bắn, nạp đạn, trúng đạn, chết) | ⬜ |
 | 6 | Kẻ địch: Navigation, AI (dùng lại `HumanoidCharacter`, chỉ thay controller) | ⬜ |
 | 7 | Vòng lặp game: wave, HUD, menu | ⬜ |
