@@ -7,6 +7,8 @@ extends Node3D
 @export var camera: Camera3D              ## camera dùng để tính hướng di chuyển và tia chuột
 @export var aim_height := 1.2             ## độ cao mặt phẳng ngắm (ngang ngực / nòng súng), m
 @export var aim_dead_zone := 0.3          ## chuột gần nhân vật hơn khoảng này thì giữ hướng cũ, m
+@export var target_min_height := 0.25     ## con trỏ đè lên vật cao hơn chân bấy nhiêu mét thì bắn THẲNG vào vật
+@export_flags_3d_physics var aim_mask := 0b101  ## tia ngắm từ camera trúng layer nào: 1 world + 3 enemy
 
 
 func _physics_process(_delta: float) -> void:
@@ -19,12 +21,14 @@ func _physics_process(_delta: float) -> void:
 	if character.is_running:
 		character.is_crouching = false                        # giữ Shift = đứng dậy chạy luôn
 	character.lean_input = _get_lean_input()
+	character.trigger = Input.is_action_pressed("shoot")   # chuột trái (action có sẵn)
 	var aim_point = _get_aim_point()
 	if aim_point != null:
 		var to_aim: Vector3 = aim_point - character.global_position
 		to_aim.y = 0.0
 		if to_aim.length() > aim_dead_zone:
 			character.aim_direction = to_aim
+	_update_aim_target(aim_point)
 
 
 ## WASD → hướng di chuyển trong thế giới, tính theo góc xoay ngang của camera
@@ -51,3 +55,19 @@ func _get_aim_point() -> Variant:
 	var plane_point := character.global_position + Vector3.UP * aim_height
 	var aim_plane := Plane(Vector3.UP, plane_point)
 	return aim_plane.intersects_ray(ray_origin, ray_dir)
+
+
+## Con trỏ đè lên một vật (hộp, tường, kẻ địch) cao hơn chân target_min_height → bắn THẲNG vào điểm đó.
+## Con trỏ chỉ vào sàn trống → dùng điểm trên mặt phẳng ngắm, súng sẽ bắn NGANG theo hướng đó.
+func _update_aim_target(plane_point: Variant) -> void:
+	var mouse := get_viewport().get_mouse_position()
+	var from := camera.project_ray_origin(mouse)
+	var to := from + camera.project_ray_normal(mouse) * 200.0
+	var query := PhysicsRayQueryParameters3D.create(from, to, aim_mask, [character.get_rid()])
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if not hit.is_empty() and hit.position.y > character.global_position.y + target_min_height:
+		character.aim_point = hit.position
+		character.aim_at_point = true
+	elif plane_point != null:
+		character.aim_point = plane_point
+		character.aim_at_point = false

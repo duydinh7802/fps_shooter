@@ -49,6 +49,13 @@ var is_crouching := false
 var lean_input := Vector3.ZERO
 ## Nghiêng hiện tại trong thế giới (đã làm mượt): hướng = phía đầu ngả về, độ dài = góc (radian)
 var lean := Vector3.ZERO
+## Đang bóp cò (controller gán)
+var trigger := false
+## Điểm ngắm trong thế giới, và có bắn thẳng vào nó không (controller gán, xem Weapon._shot_direction)
+var aim_point := Vector3.ZERO
+var aim_at_point := false
+## Súng đang cầm, tìm trong weapon_socket lúc _ready
+var weapon: Weapon
 
 ## Góc ngắm (radian), tính từ aim_direction
 var aim_yaw := 0.0
@@ -111,6 +118,12 @@ func _ready() -> void:
 		_left_hand_ik.target = weapon_socket.find_child("LeftHandGrip", true, false)
 	if _left_hand_ik.target == null:
 		push_warning("%s: chưa gán Weapon Socket (hoặc súng không có LeftHandGrip) → tay trái không bám súng" % name)
+	if weapon_socket != null:
+		for child in weapon_socket.get_children():
+			if child is Weapon:
+				weapon = child
+	if weapon != null:
+		weapon.owner_body = self     # tia đạn bỏ qua thân mình + dùng để chống bắn xuyên tường
 	_turn_curves.assign(turn_curves)
 	if _turn_curves.is_empty():
 		push_warning("%s: chưa gán Turn Curves → đứng yên sẽ không xoay chân, chỉ vặn thân trên" % name)
@@ -127,6 +140,7 @@ func _physics_process(delta: float) -> void:
 	_update_animation(delta)
 	_update_spine_twist(delta)
 	_update_lean(delta)
+	_update_weapon()
 	_update_debug()
 
 
@@ -277,6 +291,24 @@ func _update_lean(delta: float) -> void:
 	_lean_modifier.lean = lean
 
 
+## Truyền lệnh cho súng. Đang sprint thì không cho bắn.
+func _update_weapon() -> void:
+	if weapon == null:
+		return
+	var sprinting := is_running and Vector2(velocity.x, velocity.z).length() > walk_speed
+	weapon.can_fire = not sprinting
+	weapon.trigger = trigger
+	weapon.aim_point = aim_point
+	weapon.aim_at_point = aim_at_point
+	weapon.fallback_direction = aim_direction
+
+
+func _weapon_debug_text() -> String:
+	if weapon == null or weapon.data == null:
+		return "no weapon"
+	return "ammo %d/%d%s" % [weapon.ammo, weapon.data.magazine_size, "" if weapon.can_fire else "  (sprint)"]
+
+
 # ---------- Debug ----------
 
 func _create_debug() -> void:
@@ -319,6 +351,7 @@ func _update_debug() -> void:
 	_place_arrow(_aim_arrow, aim_yaw, 1.3)       # đỏ: hướng ngắm (ngang ngực)
 	_place_arrow(_body_arrow, rotation.y, 0.15)  # xanh: hướng chân (sát sàn)
 	_debug_label.global_position = global_position + Vector3.UP * 2.1
-	_debug_label.text = "body %4d°  aim %4d°\ntwist %+4d°  lean %2d°  %s" % [
+	_debug_label.text = "body %4d°  aim %4d°\ntwist %+4d°  lean %2d°  %s\n%s" % [
 		roundi(rad_to_deg(rotation.y)), roundi(rad_to_deg(aim_yaw)),
-		roundi(rad_to_deg(twist)), roundi(rad_to_deg(lean.length())), _playback.get_current_node()]
+		roundi(rad_to_deg(twist)), roundi(rad_to_deg(lean.length())), _playback.get_current_node(),
+		_weapon_debug_text()]

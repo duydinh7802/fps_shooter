@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=2 format=3 uid="uid://cme11ele3ct4p"]
+
+[ext_resource type="Script" uid="uid://cnp5iu08ellti" path="res://scripts/weapons/weapon_data.gd" id="1_71i26"]
+
+[resource]
+script = ExtResource("1_71i26")
+display_name = "SCAR-L"
+metadata/_custom_type_script = "uid://cnp5iu08ellti"
