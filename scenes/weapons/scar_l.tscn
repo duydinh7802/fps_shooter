@@ -1,5 +1,16 @@
-[gd_scene load_steps=2 format=3 uid="uid://pqln1csyd0af"]
+[gd_scene load_steps=7 format=3 uid="uid://pqln1csyd0af"]
 
 [ext_resource type="PackedScene" uid="uid://bc13lg6dlatd6" path="res://assets/weapons/source/scar_l.blend" id="1_vxm21"]
+[ext_resource type="Script" uid="uid://chckqm7n62h5x" path="res://scripts/weapons/weapon.gd" id="2_35fyl"]
+[ext_resource type="Resource" uid="uid://cme11ele3ct4p" path="res://data/weapons/scar_l.tres" id="3_gxl3j"]
+[ext_resource type="PackedScene" uid="uid://dx6aygebcxj5g" path="res://scenes/effects/muzzle_flash.tscn" id="4_gxl3j"]
+[ext_resource type="Script" uid="uid://bbudlwgn2gi8t" path="res://scripts/effects/muzzle_flash.gd" id="5_1c1wf"]
+[ext_resource type="PackedScene" uid="uid://b1ef8g4cxupes" path="res://scenes/effects/muzzle_smoke.tscn" id="6_4bnf0"]
 
 [node name="scar_l" instance=ExtResource("1_vxm21")]
+script = ExtResource("2_35fyl")
+data = ExtResource("3_gxl3j")
+
+[node name="MuzzleFlash" parent="ScarL/Muzzle" index="0" instance=ExtResource("4_gxl3j")]
+script = ExtResource("5_1c1wf")
+smoke_scene = ExtResource("6_4bnf0")

@@ -12,8 +12,10 @@ background_mode = 2
 sky = SubResource("Sky_fnfjc")
 ambient_light_source = 3
 ambient_light_color = Color(0.5294118, 0.80784315, 0.92156863, 1)
+glow_enabled = true
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hd4vj"]
+albedo_color = Color(0.21960784, 0.21960784, 0.21960784, 1)
 
 [node name="TestPlayer" type="Node3D"]
 
@@ -31,3 +33,18 @@ size = Vector3(40, 0.2, 40)
 material = SubResource("StandardMaterial3D_hd4vj")
 
 [node name="Player" parent="." instance=ExtResource("1_om70x")]
+
+[node name="CSGBox3D" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, -5)
+use_collision = true
+size = Vector3(1, 2, 1)
+
+[node name="CSGBox3D2" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 1, -3)
+use_collision = true
+size = Vector3(1, 2, 1)
+
+[node name="CSGBox3D3" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0.5, 3)
+use_collision = true
+size = Vector3(1, 2, 1)

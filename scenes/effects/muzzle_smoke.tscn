@@ -1,0 +1,82 @@
+[gd_scene load_steps=37 format=3 uid="uid://b1ef8g4cxupes"]
+
+[ext_resource type="Shader" uid="uid://bb4aipfgng4e1" path="res://assets/effects/shaders/smoke_flipbook.gdshader" id="1_7ru5j"]
+[ext_resource type="Script" uid="uid://c3v4tsgnxd1hf" path="res://scripts/effects/muzzle_smoke.gd" id="1_nqlnl"]
+[ext_resource type="Texture2D" uid="uid://biaa6rgawik6o" path="res://assets/effects/muzzle_flash/textures/smoke_side/0001.png" id="2_qg7kr"]
+[ext_resource type="Texture2D" uid="uid://b7varfuihww2p" path="res://assets/effects/muzzle_flash/textures/smoke_side/0002.png" id="3_obdue"]
+[ext_resource type="Texture2D" uid="uid://cnmxvxs63nbv" path="res://assets/effects/muzzle_flash/textures/smoke_side/0003.png" id="4_3004q"]
+[ext_resource type="Texture2D" uid="uid://jp0cpa2qkww3" path="res://assets/effects/muzzle_flash/textures/smoke_side/0004.png" id="5_pkmmn"]
+[ext_resource type="Texture2D" uid="uid://b8vt3kdmxurqo" path="res://assets/effects/muzzle_flash/textures/smoke_side/0005.png" id="6_ecsne"]
+[ext_resource type="Texture2D" uid="uid://chdlhn2f5m634" path="res://assets/effects/muzzle_flash/textures/smoke_side/0006.png" id="7_ia0uh"]
+[ext_resource type="Texture2D" uid="uid://dxmkv507a04iv" path="res://assets/effects/muzzle_flash/textures/smoke_side/0007.png" id="8_nnsea"]
+[ext_resource type="Texture2D" uid="uid://bxd70208veyg4" path="res://assets/effects/muzzle_flash/textures/smoke_side/0008.png" id="9_jfc7n"]
+[ext_resource type="Texture2D" uid="uid://di45v11xdc713" path="res://assets/effects/muzzle_flash/textures/smoke_side/0009.png" id="10_2bjcv"]
+[ext_resource type="Texture2D" uid="uid://b35dsehlkvnwq" path="res://assets/effects/muzzle_flash/textures/smoke_side/0010.png" id="11_nxk41"]
+[ext_resource type="Texture2D" uid="uid://cmoi40l33x2yj" path="res://assets/effects/muzzle_flash/textures/smoke_front/0001.png" id="12_rgyur"]
+[ext_resource type="Texture2D" uid="uid://dew8286bryrjg" path="res://assets/effects/muzzle_flash/textures/smoke_front/0003.png" id="13_qyjbq"]
+[ext_resource type="Texture2D" uid="uid://1ckhy8pkh2y4" path="res://assets/effects/muzzle_flash/textures/smoke_front/0005.png" id="14_fcuxt"]
+[ext_resource type="Texture2D" uid="uid://bcxh04hwafyim" path="res://assets/effects/muzzle_flash/textures/smoke_front/0007.png" id="15_y2t1o"]
+[ext_resource type="Texture2D" uid="uid://bfgch4b50x7t5" path="res://assets/effects/muzzle_flash/textures/smoke_front/0009.png" id="16_1rp6g"]
+[ext_resource type="Texture2D" uid="uid://gtbk81bx1jpi" path="res://assets/effects/muzzle_flash/textures/smoke_front/0011.png" id="17_p757u"]
+[ext_resource type="Texture2D" uid="uid://bfwhpiclfthhx" path="res://assets/effects/muzzle_flash/textures/smoke_front/0013.png" id="18_070rg"]
+[ext_resource type="Texture2D" uid="uid://bfmsc6f55trtq" path="res://assets/effects/muzzle_flash/textures/smoke_front/0015.png" id="19_s8j14"]
+[ext_resource type="Texture2D" uid="uid://dur2umtwsqbl4" path="res://assets/effects/muzzle_flash/textures/smoke_front/0017.png" id="20_xsox4"]
+[ext_resource type="Texture2D" uid="uid://djs67ffs036mx" path="res://assets/effects/muzzle_flash/textures/smoke_front/0019.png" id="21_spurm"]
+[ext_resource type="Texture2D" uid="uid://da1j5rqjuc464" path="res://assets/effects/muzzle_flash/textures/smoke_front/0021.png" id="22_i62tb"]
+[ext_resource type="Texture2D" uid="uid://cd8uoulglwuds" path="res://assets/effects/muzzle_flash/textures/smoke_front/0023.png" id="23_h3m51"]
+[ext_resource type="Texture2D" uid="uid://cbd2jyveg10oi" path="res://assets/effects/muzzle_flash/textures/smoke_front/0025.png" id="24_ml3fq"]
+[ext_resource type="Texture2D" uid="uid://jqrfb0qlkijr" path="res://assets/effects/muzzle_flash/textures/smoke_front/0027.png" id="25_xrtwm"]
+[ext_resource type="Texture2D" uid="uid://1cwebokc5ugb" path="res://assets/effects/muzzle_flash/textures/smoke_front/0029.png" id="26_mk7up"]
+[ext_resource type="Texture2D" uid="uid://dcsl47vcmblk" path="res://assets/effects/muzzle_flash/textures/smoke_front/0031.png" id="27_kbryg"]
+[ext_resource type="Texture2D" uid="uid://c28cyesbdgybp" path="res://assets/effects/muzzle_flash/textures/smoke_front/0033.png" id="28_4rdtc"]
+[ext_resource type="Texture2D" uid="uid://d3bv7phflokvq" path="res://assets/effects/muzzle_flash/textures/smoke_front/0035.png" id="29_4v4ph"]
+[ext_resource type="Texture2D" uid="uid://54gkrra44d01" path="res://assets/effects/muzzle_flash/textures/smoke_front/0037.png" id="30_8ta2y"]
+[ext_resource type="Texture2D" uid="uid://cucme4c1os2pl" path="res://assets/effects/muzzle_flash/textures/smoke_front/0039.png" id="31_pyqy7"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_faopu"]
+resource_local_to_scene = true
+render_priority = 0
+shader = ExtResource("1_7ru5j")
+shader_parameter/blend = 0.0
+shader_parameter/opacity = 1.0
+shader_parameter/tint = Color(1, 1, 1, 1)
+shader_parameter/billboard = false
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_768h5"]
+size = Vector2(0.6, 0.3)
+center_offset = Vector3(-0.284, 0, 0)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_7ru5j"]
+resource_local_to_scene = true
+render_priority = 0
+shader = ExtResource("1_7ru5j")
+shader_parameter/blend = 0.0
+shader_parameter/opacity = 1.0
+shader_parameter/tint = Color(1, 1, 1, 1)
+shader_parameter/billboard = true
+
+[sub_resource type="QuadMesh" id="QuadMesh_faopu"]
+size = Vector2(0.43, 0.43)
+
+[node name="MuzzleSmoke" type="Node3D"]
+script = ExtResource("1_nqlnl")
+side_frames = Array[Texture2D]([ExtResource("2_qg7kr"), ExtResource("3_obdue"), ExtResource("4_3004q"), ExtResource("5_pkmmn"), ExtResource("6_ecsne"), ExtResource("7_ia0uh"), ExtResource("8_nnsea"), ExtResource("9_jfc7n"), ExtResource("10_2bjcv"), ExtResource("11_nxk41")])
+front_frames = Array[Texture2D]([ExtResource("12_rgyur"), ExtResource("13_qyjbq"), ExtResource("14_fcuxt"), ExtResource("15_y2t1o"), ExtResource("16_1rp6g"), ExtResource("17_p757u"), ExtResource("18_070rg"), ExtResource("19_s8j14"), ExtResource("20_xsox4"), ExtResource("21_spurm"), ExtResource("22_i62tb"), ExtResource("23_h3m51"), ExtResource("24_ml3fq"), ExtResource("25_xrtwm"), ExtResource("26_mk7up"), ExtResource("27_kbryg"), ExtResource("28_4rdtc"), ExtResource("29_4v4ph"), ExtResource("30_8ta2y"), ExtResource("31_pyqy7")])
+
+[node name="SideA" type="MeshInstance3D" parent="."]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 0, 0, 0)
+material_override = SubResource("ShaderMaterial_faopu")
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_768h5")
+
+[node name="SideB" type="MeshInstance3D" parent="."]
+transform = Transform3D(-4.371139e-08, -1, 4.371139e-08, 0, -4.371139e-08, -1, 1, -4.371139e-08, 1.9106855e-15, 0, 0, 0)
+material_override = SubResource("ShaderMaterial_faopu")
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_768h5")
+
+[node name="Front" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.04)
+material_override = SubResource("ShaderMaterial_7ru5j")
+cast_shadow = 0
+mesh = SubResource("QuadMesh_faopu")
