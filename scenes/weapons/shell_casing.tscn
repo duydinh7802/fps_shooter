@@ -1,0 +1,47 @@
+[gd_scene load_steps=7 format=3 uid="uid://c5ts1tub8rii7"]
+
+[ext_resource type="PackedScene" uid="uid://c42bh6q2j4tw8" path="res://assets/weapons/ammo/casing_556.blend" id="1_00a7b"]
+[ext_resource type="Script" uid="uid://bvkclw2ojkxok" path="res://scripts/weapons/shell_casing.gd" id="1_cmdsr"]
+[ext_resource type="AnimationLibrary" uid="uid://dycbl8kviu1vw" path="res://assets/weapons/ammo/animation/weapons.res" id="2_x28ml"]
+
+[sub_resource type="PhysicsMaterial" id="PhysicsMaterial_jm62m"]
+friction = 0.6
+bounce = 0.3
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_jm62m"]
+height = 0.044
+radius = 0.005
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_00a7b"]
+albedo_color = Color(0.78431374, 0.5882353, 0.2901961, 1)
+metallic = 1.0
+roughness = 0.3
+
+[node name="ShellCasing" type="RigidBody3D"]
+collision_layer = 8
+mass = 0.012
+physics_material_override = SubResource("PhysicsMaterial_jm62m")
+freeze = true
+freeze_mode = 1
+continuous_cd = true
+linear_damp = 0.5
+angular_damp = 3.0
+script = ExtResource("1_cmdsr")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
+shape = SubResource("CylinderShape3D_jm62m")
+
+[node name="Model" parent="." instance=ExtResource("1_00a7b")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 0, 0, 0)
+
+[node name="Casing556" parent="Model" index="0"]
+surface_material_override/0 = SubResource("StandardMaterial3D_00a7b")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+callback_mode_process = 0
+libraries = {
+&"weapons": ExtResource("2_x28ml")
+}
+
+[editable path="Model"]

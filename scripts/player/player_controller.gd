@@ -22,6 +22,8 @@ func _physics_process(_delta: float) -> void:
 		character.is_crouching = false                        # giữ Shift = đứng dậy chạy luôn
 	character.lean_input = _get_lean_input()
 	character.trigger = Input.is_action_pressed("shoot")   # chuột trái (action có sẵn)
+	if Input.is_action_just_pressed("reload"):
+		character.reload()                                   # R	
 	var aim_point = _get_aim_point()
 	if aim_point != null:
 		var to_aim: Vector3 = aim_point - character.global_position

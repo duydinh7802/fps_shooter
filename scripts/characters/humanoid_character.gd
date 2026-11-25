@@ -33,6 +33,8 @@ extends CharacterBody3D
 ## Node WeaponSocket (dưới RightHandAttachment). Tay trái sẽ bám vào Empty "LeftHandGrip" của súng bên trong nó
 @export var weapon_socket: Node3D
 @export var left_hand_ik := true      ## tắt để xem tay trái theo animation gốc
+@export var reload_animation := &"rifle_upper/reload"   ## clip nạp đạn (dùng để tính tốc độ phát)
+@export var ik_fade_time := 0.2                         ## giây tắt / bật IK tay trái khi nạp
 
 @export_group("Debug")
 @export var show_debug := true        ## mũi tên ngắm (đỏ), mũi tên chân (xanh), chữ thông số
@@ -64,11 +66,13 @@ var twist := 0.0
 ## true khi đang xoay chân tại chỗ (đứng yên mà lệch quá max_twist_angle)
 var is_turning := false
 
-const BLEND_PATH := &"parameters/Locomotion/blend_position"
-const PLAYBACK_PATH := &"parameters/playback"
-const TURN_BLEND_PATH := &"parameters/TurnInPlace/blend_position"
-const CROUCH_BLEND_PATH := &"parameters/Crouch/blend_position"
-const CROUCH_TURN_BLEND_PATH := &"parameters/CrouchTurn/blend_position"
+const BLEND_PATH := &"parameters/StateMachine/Locomotion/blend_position"
+const PLAYBACK_PATH := &"parameters/StateMachine/playback"
+const TURN_BLEND_PATH := &"parameters/StateMachine/TurnInPlace/blend_position"
+const CROUCH_BLEND_PATH := &"parameters/StateMachine/Crouch/blend_position"
+const CROUCH_TURN_BLEND_PATH := &"parameters/StateMachine/CrouchTurn/blend_position"
+const RELOAD_REQUEST_PATH := &"parameters/Reload/request"   ## OneShot thân trên
+const RELOAD_SPEED_PATH := &"parameters/ReloadSpeed/scale"  ## TimeScale: co giãn clip cho vừa thời gian nạp
 const YAW_TRACK := ^"TurnYaw"     ## tên Empty trong Blender = tên track trong animation _yaw.res
 const YAW_SAMPLE_FPS := 30.0      ## Mixamo 30 frame/giây
 
@@ -82,6 +86,7 @@ var _over_threshold_time := 0.0
 var _spine_twist: SpineTwistModifier
 var _lean_modifier: LeanModifier
 var _left_hand_ik: LeftHandIKModifier
+var _ik_tween: Tween
 var _aim_arrow: MeshInstance3D
 var _body_arrow: MeshInstance3D
 var _debug_label: Label3D
@@ -124,6 +129,10 @@ func _ready() -> void:
 				weapon = child
 	if weapon != null:
 		weapon.owner_body = self     # tia đạn bỏ qua thân mình + dùng để chống bắn xuyên tường
+		weapon.reload_started.connect(_on_reload_started)
+		weapon.reload_finished.connect(_on_reload_ended)
+		weapon.reload_cancelled.connect(_on_reload_ended)
+	_setup_upper_body_filter()
 	_turn_curves.assign(turn_curves)
 	if _turn_curves.is_empty():
 		push_warning("%s: chưa gán Turn Curves → đứng yên sẽ không xoay chân, chỉ vặn thân trên" % name)
@@ -290,12 +299,17 @@ func _update_lean(delta: float) -> void:
 	lean = lean.lerp(target, clampf(lean_smoothing * delta, 0.0, 1.0))
 	_lean_modifier.lean = lean
 
+## Nạp đạn (controller / AI gọi). Trả về true nếu bắt đầu nạp
+func reload() -> bool:
+	return weapon != null and weapon.reload()
 
 ## Truyền lệnh cho súng. Đang sprint thì không cho bắn.
 func _update_weapon() -> void:
 	if weapon == null:
 		return
 	var sprinting := is_running and Vector2(velocity.x, velocity.z).length() > walk_speed
+	if sprinting and weapon.is_reloading:
+		weapon.cancel_reload()           # chạy = hạ súng → huỷ nạp (đạn không đổi)	
 	weapon.can_fire = not sprinting
 	weapon.trigger = trigger
 	weapon.aim_point = aim_point
@@ -306,8 +320,54 @@ func _update_weapon() -> void:
 func _weapon_debug_text() -> String:
 	if weapon == null or weapon.data == null:
 		return "no weapon"
-	return "ammo %d/%d%s" % [weapon.ammo, weapon.data.magazine_size, "" if weapon.can_fire else "  (sprint)"]
+	var text := "ammo %d/%d | %d" % [weapon.ammo, weapon.data.magazine_size, weapon.reserve]
+	if weapon.is_reloading:
+		text += "  RELOAD %.1fs" % weapon.reload_time_left
+	elif not weapon.can_fire:
+		text += "  (sprint)"
+	return text
 
+# ---------- Nạp đạn: lớp thân trên ----------
+
+## OneShot "Reload" chỉ tác động lên Spine và mọi xương con (lưng, vai, tay, ngón, cổ, đầu).
+## Hông và chân vẫn theo state machine → vừa đi / ngồi / xoay vừa thay băng.
+func _setup_upper_body_filter() -> void:
+	var blend_tree := anim_tree.tree_root as AnimationNodeBlendTree
+	if blend_tree == null or not blend_tree.has_node(&"Reload"):
+		push_warning("%s: AnimationTree chưa có OneShot 'Reload' → không có animation nạp đạn" % name)
+		return
+	var one_shot := blend_tree.get_node(&"Reload")
+	one_shot.filter_enabled = true
+	var spine := skeleton.find_bone(&"Spine")
+	for bone in skeleton.get_bone_count():
+		var b := bone                                   # đi ngược lên cha xem có gặp Spine không
+		while b >= 0 and b != spine:
+			b = skeleton.get_bone_parent(b)
+		one_shot.set_filter_path(NodePath("%GeneralSkeleton:" + skeleton.get_bone_name(bone)), b == spine)
+
+
+func _on_reload_started(duration: float) -> void:
+	# Co giãn clip cho vừa thời gian nạp của súng (clip 3.3 s, SCAR-L 2.5 s → phát nhanh 1.33 lần)
+	var player := anim_tree.get_node(anim_tree.anim_player) as AnimationPlayer
+	var clip: Animation = player.get_animation(reload_animation) if player.has_animation(reload_animation) else null
+	anim_tree.set(RELOAD_SPEED_PATH, clip.length / duration if clip != null and duration > 0.0 else 1.0)
+	anim_tree.set(RELOAD_REQUEST_PATH, AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
+	_fade_left_hand_ik(0.0)                             # tay trái rời ốp súng, đi theo clip (lấy băng)
+
+
+func _on_reload_ended() -> void:
+	anim_tree.set(RELOAD_REQUEST_PATH, AnimationNodeOneShot.ONE_SHOT_REQUEST_FADE_OUT)
+	_fade_left_hand_ik(1.0)                             # tay trái về lại ốp súng
+
+
+## Tắt / bật IK tay trái mượt bằng `influence` (1 = bám súng, 0 = theo animation)
+func _fade_left_hand_ik(target: float) -> void:
+	if _left_hand_ik == null:
+		return
+	if _ik_tween != null:
+		_ik_tween.kill()
+	_ik_tween = create_tween()
+	_ik_tween.tween_property(_left_hand_ik, "influence", target, ik_fade_time)
 
 # ---------- Debug ----------
 

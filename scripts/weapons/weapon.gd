@@ -6,11 +6,16 @@ extends Node3D
 ## Phát ra mỗi phát bắn: from = đầu nòng, to = điểm trúng (hoặc cuối tầm), collider = vật trúng (null nếu trượt)
 signal fired(from: Vector3, to: Vector3, collider: Object)
 signal ammo_changed(ammo: int, reserve: int)
+signal reload_started(duration: float)   ## bắt đầu nạp, duration = thời gian nạp (giây)
+signal reload_finished                   ## nạp xong, đạn đã chuyển vào băng
+signal reload_cancelled                  ## bị huỷ giữa chừng (vd chạy), đạn không đổi
+signal dry_fired                         ## bóp cò khi băng rỗng (tiếng "tạch")
 
 @export var data: WeaponData                             ## thông số súng (file .tres)
 @export_flags_3d_physics var hit_mask := 0b101           ## tia đạn trúng layer nào: 1 world + 3 enemy
 @export var show_debug := true                           ## vẽ tia đỏ mỗi phát bắn
 @export var debug_line_time := 0.1                       ## tia đỏ hiện bao lâu, giây
+@export var auto_reload := true                          ## bóp cò khi băng rỗng → tự nạp (nếu còn dự trữ)
 
 # ---- Nhân vật gán mỗi frame ----
 var trigger := false                    ## đang bóp cò
@@ -22,6 +27,8 @@ var owner_body: CollisionObject3D       ## thân nhân vật: loại khỏi tia 
 
 var ammo := 0
 var reserve := 0
+var is_reloading := false
+var reload_time_left := 0.0             ## còn bao lâu nạp xong, giây
 
 var _muzzle: Node3D
 var _cooldown := 0.0          ## còn bao lâu mới được bắn phát tiếp
@@ -48,16 +55,22 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if data == null:
 		return
+	_update_reload(delta)
 	_update_trigger(delta)
 	_update_debug(delta)
 
 
 func _update_trigger(delta: float) -> void:
-	var pressed := trigger and can_fire
+	var pressed := trigger and can_fire and not is_reloading
 	var just_pressed := pressed and not _was_pressed
 	_was_pressed = pressed
-	if not can_fire:
-		_burst_left = 0                     # đang bắn dở loạt mà bị cấm (ví dụ chạy) → dừng
+	if not can_fire or is_reloading:
+		_burst_left = 0                     # đang bắn dở loạt mà bị cấm (chạy, nạp đạn) → dừng
+	if just_pressed and ammo <= 0:
+		dry_fired.emit()
+		if auto_reload:
+			reload()
+		return                              # hết đạn: không bắn
 	match data.fire_mode:
 		WeaponData.FireMode.SEMI:
 			if just_pressed:
@@ -121,6 +134,47 @@ func _shot_direction(from: Vector3) -> Vector3:
 		return fallback.normalized() if fallback.length_squared() > 0.0001 else -global_basis.z
 	return to_aim.normalized() if aim_at_point else flat.normalized()
 
+# ---------- Nạp đạn ----------
+
+## Có nạp được không: không đang nạp, băng chưa đầy, còn đạn dự trữ
+func can_reload() -> bool:
+	return data != null and not is_reloading and ammo < data.magazine_size and reserve > 0
+
+
+## Bắt đầu nạp. Trả về false nếu không nạp được. Nhân vật / AI gọi hàm này
+func reload() -> bool:
+	if not can_reload():
+		return false
+	is_reloading = true
+	reload_time_left = data.reload_time
+	_burst_left = 0
+	reload_started.emit(data.reload_time)
+	return true
+
+
+## Huỷ nạp giữa chừng (vd bắt đầu chạy): đạn giữ nguyên như trước khi nạp
+func cancel_reload() -> void:
+	if not is_reloading:
+		return
+	is_reloading = false
+	reload_time_left = 0.0
+	reload_cancelled.emit()
+
+
+func _update_reload(delta: float) -> void:
+	if not is_reloading:
+		return
+	reload_time_left -= delta
+	if reload_time_left > 0.0:
+		return
+	# Đạn còn trong băng cũ được giữ lại; chỉ lấy từ dự trữ phần còn thiếu
+	var take := mini(data.magazine_size - ammo, reserve)
+	ammo += take
+	reserve -= take
+	is_reloading = false
+	reload_time_left = 0.0
+	ammo_changed.emit(ammo, reserve)
+	reload_finished.emit()
 
 # ---------- Debug: tia đỏ (trúng) / vàng (trượt) ----------
 

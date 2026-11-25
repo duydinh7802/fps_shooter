@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://pqln1csyd0af"]
+[gd_scene load_steps=11 format=3 uid="uid://pqln1csyd0af"]
 
 [ext_resource type="PackedScene" uid="uid://bc13lg6dlatd6" path="res://assets/weapons/source/scar_l.blend" id="1_vxm21"]
 [ext_resource type="Script" uid="uid://chckqm7n62h5x" path="res://scripts/weapons/weapon.gd" id="2_35fyl"]
@@ -6,6 +6,10 @@
 [ext_resource type="PackedScene" uid="uid://dx6aygebcxj5g" path="res://scenes/effects/muzzle_flash.tscn" id="4_gxl3j"]
 [ext_resource type="Script" uid="uid://bbudlwgn2gi8t" path="res://scripts/effects/muzzle_flash.gd" id="5_1c1wf"]
 [ext_resource type="PackedScene" uid="uid://b1ef8g4cxupes" path="res://scenes/effects/muzzle_smoke.tscn" id="6_4bnf0"]
+[ext_resource type="Script" uid="uid://di4n26ev6r3hs" path="res://scripts/weapons/shell_ejector.gd" id="7_s2vhe"]
+[ext_resource type="PackedScene" uid="uid://c5ts1tub8rii7" path="res://scenes/weapons/shell_casing.tscn" id="8_m10wq"]
+[ext_resource type="AnimationLibrary" uid="uid://8nkimksas2eo" path="res://assets/weapons/ammo/animation/weapons_fire.res" id="9_m10wq"]
+[ext_resource type="Script" uid="uid://cext5rh7r1p41" path="res://scripts/weapons/magazine_handler.gd" id="10_ckwrt"]
 
 [node name="scar_l" instance=ExtResource("1_vxm21")]
 script = ExtResource("2_35fyl")
@@ -14,3 +18,21 @@ data = ExtResource("3_gxl3j")
 [node name="MuzzleFlash" parent="ScarL/Muzzle" index="0" instance=ExtResource("4_gxl3j")]
 script = ExtResource("5_1c1wf")
 smoke_scene = ExtResource("6_4bnf0")
+
+[node name="EjectPort" type="Marker3D" parent="ScarL" index="4" node_paths=PackedStringArray("gun_animator")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.025, 0.1, -0.12)
+script = ExtResource("7_s2vhe")
+shell_scene = ExtResource("8_m10wq")
+gun_animator = NodePath("../../GunAnimator")
+fire_animation = &"weapons_fire/fire"
+
+[node name="GunAnimator" type="AnimationPlayer" parent="." index="1"]
+reset_on_save = false
+callback_mode_process = 0
+libraries = {
+&"weapons_fire": ExtResource("9_m10wq")
+}
+
+[node name="MagazineHandler" type="Node" parent="." index="2" node_paths=PackedStringArray("magazine")]
+script = ExtResource("10_ckwrt")
+magazine = NodePath("../ScarL/Mag")
