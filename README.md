@@ -79,8 +79,16 @@ assets/characters/
     ├── source/locomotion/, source/crouch/    ← animation đã chuẩn hoá (.blend), Godot import trực tiếp
     ├── clips/*.res, clips/crouch/*.res       ← clip Godot tách ra khi import
     ├── locomotion.tres                      ← AnimationLibrary: idle, walk 8 hướng, sprint 8 hướng, turn 90/180
-    └── crouch.tres                          ← AnimationLibrary: idle, walk 8 hướng, turn 90/180 khi ngồi (Bước 19)
+    ├── crouch.tres                          ← AnimationLibrary: idle, walk 8 hướng, turn 90/180 khi ngồi (Bước 19)
+    ├── source/reloading/reloading.blend      ← clip nạp đạn Mixamo đã chuẩn hoá (Bước 25)
+    ├── clips/rifle_upper/reload.res          ← clip nạp đạn 3.33 s, không loop
+    └── reload.res                           ← AnimationLibrary "reload" → clip tên `reload/reload`
 assets/weapons/source/scar_l.blend            ← súng SCAR-L đã chuẩn hoá: mét, nòng +Y, gốc ở báng cầm (Bước 21)
+assets/weapons/ammo/
+├── casing_556.blend                          ← vỏ đạn 5.56 (44.7 mm) tách từ FBX SCAR (Bước 24)
+└── animation/
+    ├── weapons.res → eject.res               ← library "weapons": đường văng của vỏ (0.06 s)
+    └── weapons_fire.res → fire.res           ← library "weapons_fire": khoá nòng giật + gọi eject()
 assets/effects/
 ├── muzzle_flash/textures/
 │   ├── muzzle_side.png, muzzle_front.png      ← lửa đầu nòng, 1 khung (từ EXR FX Elements, Bước 23)
@@ -91,8 +99,11 @@ data/weapons/scar_l.tres                      ← WeaponData của SCAR-L (Bư�
 scenes/
 ├── characters/swat/
 │   ├── swat_model.tscn                       ← model SWAT + AnimationPlayer (kho animation)
-│   └── swat_character.tscn                   ← nhân vật hoàn chỉnh: thân, collision, AnimationTree
-├── weapons/scar_l.tscn                       ← scene súng (kế thừa scar_l.blend) + weapon.gd + MuzzleFlash ở Muzzle
+│   ├── swat_character.tscn                   ← nhân vật hoàn chỉnh: thân, collision, AnimationTree (BlendTree)
+│   └── locomotion_states.tres                ← StateMachine di chuyển, tách ra file riêng (Bước 25)
+├── weapons/
+│   ├── scar_l.tscn                           ← scene súng + weapon.gd + MuzzleFlash + EjectPort + GunAnimator + MagazineHandler
+│   └── shell_casing.tscn                     ← một vỏ đạn: RigidBody3D + clip "eject" (Bước 24)
 ├── effects/
 │   ├── muzzle_flash.tscn                     ← lửa: 2 tấm side xếp chéo + front billboard + đèn (Bước 23)
 │   └── muzzle_smoke.tscn                     ← một đám khói, tạo mới mỗi phát, thả vào thế giới (Bước 23)
@@ -108,7 +119,10 @@ scripts/
 │   └── left_hand_ik_modifier.gd              ← (@tool) IK tay trái bám ốp súng + ngón tay nắm (Bước 21)
 ├── weapons/
 │   ├── weapon_data.gd                        ← Resource thông số súng (Bước 22)
-│   └── weapon.gd                             ← bóp cò, nhịp bắn, hitscan, signal fired (Bước 22)
+│   ├── weapon.gd                             ← bóp cò, nhịp bắn, hitscan, nạp đạn, các signal (Bước 22, 25)
+│   ├── shell_ejector.gd                      ← (trên EjectPort) phát clip khoá nòng, tạo vỏ, giới hạn 40 vỏ (Bước 24)
+│   ├── shell_casing.gd                       ← vỏ đạn: animation → physics → tự huỷ (Bước 24)
+│   └── magazine_handler.gd                   ← (@tool) băng cũ rơi, băng mới trong tay trái khi nạp (Bước 25)
 ├── effects/
 │   ├── muzzle_flash.gd                       ← (@tool) chớp lửa mỗi phát + nhả khói (Bước 23)
 │   └── muzzle_smoke.gd                       ← chuỗi khói: chọn khung, trôi, nở, tan, tự huỷ (Bước 23)
@@ -1445,7 +1459,7 @@ PlayerController ──(chuột trái, điểm ngắm)──► HumanoidCharacte
 | `burst_count` | 3 | Số phát mỗi loạt (BURST) |
 | `damage` | 25 | Dùng ở D3 |
 | `max_range` | 60 m | Tầm tia bắn. Đặt tên `max_range` vì `range` là hàm có sẵn của GDScript |
-| `magazine_size` / `reserve_ammo` / `reload_time` | 30 / 90 / 2.5 s | Dùng ở D7 (nạp đạn) |
+| `magazine_size` / `reserve_ammo` / `reload_time` | 30 / 90 / 2.5 s | Dùng ở Bước 25 (nạp đạn) |
 | `spread` | 0° | Dùng ở D6 (toả đạn) |
 
 **Thao tác:** FileSystem → chuột phải `data/weapons` → **New → Resource…** → `WeaponData` → lưu `scar_l.tres` → đặt Display Name.
@@ -1707,6 +1721,326 @@ Test headless + chụp màn hình game thật:
 
 ---
 
+## Bước 24: Vỏ đạn văng ra – kết hợp animation + physics
+
+Kết quả của bước này:
+- Mỗi phát bắn, tay kéo khoá nòng giật lùi rồi về.
+- Một vỏ đồng 5.56 bật ra bên phải súng, xoay lộn, rơi xuống sàn, nảy, lăn, nằm yên.
+- Sau 8 s vỏ thu nhỏ rồi biến mất. Trên sàn giữ tối đa 40 vỏ.
+
+### 24.1 Ý tưởng: mỗi bên làm phần mình giỏi nhất
+| Cách | Vấn đề |
+|---|---|
+| Thuần physics (tạo RigidBody rồi đẩy một lực) | Mỗi phát văng một kiểu, khó kiểm soát. Vỏ nhỏ (Ø 1 cm) bay nhanh, dễ xuyên sàn hoặc kẹt vào súng |
+| Thuần animation | Văng ra đẹp, nhưng chạm sàn không nảy, không lăn theo địa hình |
+| **Kết hợp** | 0.06 s đầu chạy theo **animation** gắn với súng: lần nào cũng sắc nét, đúng hướng. Sau đó **chuyển sang physics** với vận tốc lấy từ chính animation: rơi, nảy, lăn tự nhiên |
+
+```
+Weapon.fired
+  └─► EjectPort (shell_ejector.gd) phát clip "weapons_fire/fire" trên GunAnimator
+        • Bolt lùi 5 cm rồi về (0 → 0.02 → 0.06 s)
+        • 0.02 s: Call Method track gọi EjectPort.eject()
+              └─► tạo ShellCasing làm CON của EjectPort
+                    PHA 1 – ANIMATION: clip "weapons/eject" (0.06 s), vỏ đi theo súng
+                    PHA 2 – PHYSICS:   reparent ra thế giới, freeze = false,
+                                       vận tốc = đạo hàm 10 ms cuối của clip + vận tốc của súng
+                    PHA 3:             nằm yên → sau lifetime thu nhỏ rồi xoá
+```
+
+**Không cần tải animation nào.** Cả hai clip (khoá nòng, đường văng) đều ngắn, gắn với đúng khẩu súng này, nên tự keyframe trong Godot. Chuỗi EXR vỏ đạn trên mạng là phần tử 2D để ghép phim (vỏ xoay tại chỗ giữa khung), không dùng được cho vỏ 3D rơi bằng physics.
+
+### 24.2 Blender: tách vỏ đạn 5.56 từ FBX SCAR
+Object **`5.56x45`** trong `SCAR L.fbx` có 2 material:
+- **`Пуля 1`** là vỏ: 32 mặt, chiếm 78% chiều dài, khớp đạn thật (44.7 / 57.4 mm).
+- **`Пуля 2`** là đầu đạn: 13 mặt.
+
+1. **File → New → General** → **A** → **X** (xoá hết) → **File → Import → FBX** → `SCAR L.fbx`.
+2. Outliner: click `5.56x45` → khung 3D **Ctrl+I** → **X** (xoá mọi thứ khác) → **Numpad .** để phóng to.
+3. **Xoá đầu đạn.** Đầu đạn và cổ vỏ **không dính đỉnh nhau**, nên quét chọn được:
+   1. **Numpad 1** (nhìn trước, đầu đạn nhọn ở trên).
+   2. **Tab** → **1** (chọn Vertex) → **Alt+A** → **Alt+Z** (X-ray).
+   3. Quét khung chữ nhật **chỉ quanh phần nhọn**.
+   4. Bật **Overlays → Statistics**: phải là **Verts 18/54**. Nhiều hơn là lẹm vào cổ vỏ, quét lại.
+   5. **X → Vertices**. Còn **Verts 36, Faces 31**. **Alt+Z** → **Tab**.
+4. Tab Material: xoá slot thừa, đổi tên slot còn lại thành **`M_Brass`** (màu chỉnh trong Godot).
+5. **Chuẩn hoá:**
+   1. **Ctrl+A → All Transforms**.
+   2. **Object → Set Origin → Origin to Geometry** (tâm khối lượng, để physics xoay đúng) → **Alt+G**.
+   3. **S → 0.0931** (0.0447 m ÷ 0.48 đơn vị) → **Ctrl+A → All Transforms**.
+   4. **F2** → `Casing556`. **File → Clean Up → Purge Unused Data**.
+6. **Ctrl+S** → `assets/weapons/ammo/casing_556.blend`.
+
+**Kiểm tra (N → Item):** Location / Rotation 0, Scale 1, cạnh dài **0.0443 m**.
+
+> Bản trong project có trục dài theo **X** của Blender (lúc xoay bị nhầm trục). Không cần sửa, chỉ cần **bù trong Godot**: node `Model` của `shell_casing.tscn` xoay Y −90°. Nếu làm lại từ đầu, gõ thêm **R → X → −90** ở bước 5 để miệng vỏ hướng +Y Blender (= −Z Godot, trùng hướng nòng), rồi để `Model` rotation 0.
+
+### 24.3 Cửa nhả vỏ `EjectPort`
+`scar_l.tscn` → chuột phải **`ScarL`** → Add Child Node → `Marker3D` → **`EjectPort`**.
+
+| | Giá trị | Lý do |
+|---|---|---|
+| Position | `(0.025, 0.10, -0.12)` | Khe nhả vỏ bên phải thân súng, ngay trên băng đạn. Blender (0.022, 0.12, 0.10) → Godot (x, z, −y). X nhô ra ngoài thân 5 mm |
+| Rotation | `(0, 0, 0)` | Trục trùng súng: **+X phải, +Y lên, +Z lùi về báng**. Keyframe đường văng chỉ cần nghĩ "ra phải bao nhiêu, lên bao nhiêu" |
+
+Kiểm tra: viewport → click trục **−X** của gizmo (nhìn từ bên phải súng). Marker phải nằm trên khe xám đậm.
+
+### 24.4 Scene vỏ đạn `scenes/weapons/shell_casing.tscn`
+```
+ShellCasing (RigidBody3D, shell_casing.gd)
+├── CollisionShape3D   CylinderShape3D r 0.005, h 0.044, Rotation X 90° (trụ Godot dựng theo Y)
+├── Model              casing_556.blend (Editable Children), Rotation Y −90°
+│   └── Casing556      Surface Material Override: Albedo C8964A, Metallic 1, Roughness 0.3
+└── AnimationPlayer    Callback Mode Process = Physics, library "weapons" (clip eject)
+```
+
+| Thuộc tính `ShellCasing` | Giá trị | Lý do |
+|---|---|---|
+| Mass | `0.012` | 12 g, vỏ đồng thật |
+| Physics Material Override | Friction `0.6`, Bounce `0.3` | Nảy vài lần rồi lăn, dừng |
+| **Continuous CD** | bật | Vỏ bay khoảng 3 m/s, mỗi tick đi 5 cm, lớn hơn bề dày vỏ. Không bật là **xuyên sàn** |
+| **Freeze** + Freeze Mode **Kinematic** | bật | Pha 1: animation điều khiển, physics chưa chạy |
+| Linear / Angular Damp | `0.5` / `3` | Lăn chậm dần, không quay mãi |
+| Collision Layer / Mask | **4** / **1** | Layer `debris`, chỉ va `world`. Không chặn người, không chặn đạn |
+
+**Callback Mode Process = Physics** để animation chạy cùng nhịp physics, nên vận tốc tính lúc chuyển pha mới khớp.
+
+### 24.5 Clip `eject` (đường văng)
+Panel Animation → **New** → `eject` → độ dài **0.06**, Snap **0.01**, **Loop tắt**. Lưu vào library **`weapons`** (`assets/weapons/ammo/animation/weapons.res`), nên tên đầy đủ là **`weapons/eject`**.
+
+| Thời điểm | Position | Rotation (độ) |
+|---|---|---|
+| 0.00 | (0, 0, 0) | (0, 0, 0) |
+| 0.03 | (0.08, 0.045, 0.015) | (5, 90, 0) |
+| 0.06 | (0.16, 0.06, 0.035) | (15, 200, 0) |
+
+Cách đặt keyframe: **kéo timeline tới thời điểm → nhập giá trị → bấm chìa khoá**. Hộp thoại hỏi tạo track thì **bỏ tick "Create RESET Track(s)"**.
+
+Xong: kéo timeline về 0.00, root phải là (0, 0, 0), rồi **Ctrl+S**.
+
+Vận tốc khi chuyển sang physics ≈ (0.08, 0.015, 0.02) m / 0.03 s ≈ **2.7 m/s sang phải**, đúng tầm vỏ văng thật.
+
+### 24.6 Khoá nòng giật (`GunAnimator`, clip `fire`)
+1. `scar_l.tscn` → chuột phải root `scar_l` → Add Child Node → `AnimationPlayer` → **`GunAnimator`**:
+   - **Callback Mode → Process** = **Physics**.
+   - **bỏ tick Reset On Save**.
+2. **New** clip `fire`:
+   - độ dài **0.06**, Loop tắt;
+   - lưu vào library **`weapons_fire`**, nên tên đầy đủ là **`weapons_fire/fire`**.
+3. Track Position của **`ScarL/Bolt`** (tay kéo khoá nòng, SCAR có tay kéo chạy theo khoá nòng):
+
+   | Thời điểm | Position |
+   |---|---|
+   | 0.00 | (0, 0, 0) |
+   | 0.02 | (0, 0, **0.05**): lùi 5 cm về báng |
+   | 0.06 | (0, 0, 0) |
+
+4. **+ Add Track → Call Method Track** → node **`EjectPort`**. Ở **0.02**, chuột phải trên track → **Insert Key** → hàm **`eject`**.
+   - 0.02 s là lúc khoá nòng lùi hết cỡ, cửa nhả vỏ mở rộng nhất.
+   - Clip 0.06 s ngắn hơn khoảng cách 0.1 s giữa 2 phát (600 phát/phút).
+5. `EjectPort` → **Gun Animator** = `GunAnimator`, **Fire Animation** = `weapons_fire/fire`.
+
+### 24.7 Script
+**`scripts/weapons/shell_ejector.gd`** (class `ShellEjector`, gắn lên `EjectPort`):
+
+| Phần | Làm gì |
+|---|---|
+| Nối súng | `_find_weapon()` đi ngược cây node tới `Weapon`, `fired.connect(...)` |
+| Mỗi phát | Có `gun_animator` thì `play(fire_animation)` + `seek(0, true)` (bắn liên tục luôn chạy lại từ đầu). Không có thì gọi `eject()` ngay (để test) |
+| `eject()` | Tạo `shell_scene` làm con của `EjectPort`. Giữ tối đa `max_shells` (40), quá thì xoá vỏ cũ nhất |
+
+**`scripts/weapons/shell_casing.gd`** (class `ShellCasing`):
+
+| Pha | Code |
+|---|---|
+| 1. Animation | `_ready`: `freeze = true` (Kinematic), phát `eject_animation` (`weapons/eject`), `seek(0, true)` để không hiện sai chỗ 1 frame. Trong `_physics_process`, đo vận tốc của `EjectPort` (người chạy / xoay) |
+| 2. Physics | `animation_finished` → `_release.call_deferred()` (đổi cha ngay trong lúc AnimationPlayer đang chạy không an toàn). Tính vận tốc từ clip bằng `value_track_interpolate` ở 10 ms cuối → `_anim.active = false` → `reparent(world, true)` → `freeze = false` → đặt `linear_velocity` (× ngẫu nhiên ± `velocity_jitter`, + vận tốc súng) và `angular_velocity` (+ `extra_spin`) → `reset_physics_interpolation()` |
+| 3. Dọn | Quá `lifetime` thì thu nhỏ **`Model`** (không đụng scale của RigidBody) trong `shrink_time`, rồi `queue_free()` |
+
+**Vì sao lấy vận tốc từ clip:** đổi keyframe là đổi luôn tốc độ văng, không phải chỉnh số ở hai nơi.
+
+**Vì sao `reset_physics_interpolation()`:** project bật Physics Interpolation (Bước 17). Vừa đổi cha mà không reset, Godot sẽ nội suy từ toạ độ cũ, nên vỏ để lại một vệt kéo.
+
+### 24.8 Project Settings
+| Mục | Giá trị | Lý do |
+|---|---|---|
+| Layer Names → 3D Physics → **Layer 4** | `debris` | Vỏ đạn, băng đạn rơi |
+| Physics → 3D → **Physics Engine** | **Jolt Physics** | Godot Physics mặc định để vỏ 1 cm **lún vào sàn khoảng 7 mm** rồi rung mãi. Jolt giữ vật nhỏ ổn định. Đã test: tốc độ đi và đứng của nhân vật không đổi |
+
+### 24.9 Thông số để chỉnh
+| Muốn | Chỉnh |
+|---|---|
+| Vỏ bay xa / gần hơn | Clip `eject`: nới / thu khoảng cách giữa keyframe 0.03 và 0.06 |
+| Vỏ xoay nhanh / chậm hơn | Clip `eject`: tăng / giảm Rotation Y ở 0.06 |
+| Mỗi vỏ một hướng khác nhau hơn | `ShellCasing` → `velocity_jitter`, `extra_spin` |
+| Vỏ nằm lâu hơn | `lifetime` |
+| Nhiều / ít vỏ trên sàn | `EjectPort` → `max_shells` |
+| Vỏ nhỏ, khó thấy từ camera cao | `Model` Scale **2–3**, kèm theo tăng collision (r `0.015`, h `0.132` khi ×3) và cho material chút Emission |
+
+### 24.10 Kiểm tra (F6 `test_player.tscn`)
+| Thao tác | Mong đợi |
+|---|---|
+| Bắn 1 phát | Tay kéo giật lùi rồi về. Vỏ bật ra **bên phải**, xoay lộn, rơi cách 1–1.5 m, nảy, nằm yên |
+| Giữ chuột trái | Vỏ rải thành đám bên phải, tối đa 40 |
+| Vừa chạy vừa bắn | Vỏ văng lệch theo hướng chạy |
+| Nghiêng Q/E, ngồi rồi bắn | Vỏ văng theo đúng tư thế súng |
+| Đợi 8 s | Vỏ cũ thu nhỏ rồi biến mất |
+
+---
+
+## Bước 25: Nạp đạn (R) – logic, animation thân trên, băng đạn rơi
+
+Kết quả của bước này:
+- Bấm **R** (hoặc bóp cò khi hết đạn): nửa thân trên phát clip thay băng, chân vẫn đi / ngồi / xoay bình thường.
+- Tay trái rời ốp súng. Băng cũ tuột xuống sàn, tay trái lấy băng mới, lắp vào súng, rồi về ốp súng.
+- Chạy (Shift) giữa chừng thì huỷ nạp, đạn không đổi.
+
+### 25.1 Luồng
+```
+PlayerController (R) ─► HumanoidCharacter.reload() ─► Weapon.reload()
+                                                        │ reload_started(duration)
+              ┌─────────────────────────────────────────┼───────────────────────────────┐
+              ▼                                         ▼                               ▼
+   HumanoidCharacter                         MagazineHandler (trong súng)      (sau: HUD, âm thanh)
+   • TimeScale = độ dài clip ÷ duration      • 22%: băng trên súng ẩn,
+   • OneShot "Reload" FIRE                     bản sao RigidBody rơi xuống
+   • IK tay trái 1 → 0 trong 0.2 s           • 32%: băng mới hiện ở MagSocket (tay trái)
+                                             • 50%: băng trong tay ẩn, băng trên súng hiện lại
+                                                        │
+             Weapon._update_reload: hết thời gian → ammo_changed + reload_finished
+             Sprint giữa chừng: cancel_reload() → reload_cancelled (đạn không đổi)
+                                                        │
+   HumanoidCharacter: OneShot FADE_OUT, IK 0 → 1   MagazineHandler: trả mọi thứ về như cũ
+```
+Súng **không đọc input**, nhân vật **không biết băng đạn**. Mọi phần chỉ nói chuyện bằng signal, nên sau này AI chỉ cần gọi `character.reload()`.
+
+### 25.2 Input
+**Project Settings → Input Map** → thêm `reload` = phím **R** (Physical Keycode).
+
+`player_controller.gd`, trong `_physics_process`:
+```gdscript
+if Input.is_action_just_pressed("reload"):
+	character.reload()
+```
+
+### 25.3 Logic nạp trong `weapon.gd`
+| Thêm | Ý nghĩa |
+|---|---|
+| Signal `reload_started(duration)`, `reload_finished`, `reload_cancelled`, `dry_fired` | Cho animation, băng đạn, HUD, âm thanh nghe |
+| `@export var auto_reload := true` | Bóp cò khi băng rỗng → `dry_fired` rồi tự nạp (nếu còn dự trữ) |
+| `is_reloading`, `reload_time_left` | Trạng thái, hiện trên label debug |
+| `can_reload()` | Không đang nạp, băng chưa đầy, còn dự trữ |
+| `reload()` | Bắt đầu đếm `data.reload_time` (SCAR-L 2.5 s), phát `reload_started` |
+| `cancel_reload()` | Dừng, đạn giữ nguyên, phát `reload_cancelled` |
+| `_update_reload(delta)` | Gọi **trước** `_update_trigger`. Hết giờ: `take = mini(magazine_size − ammo, reserve)`, đạn còn trong băng cũ được giữ lại |
+| `_update_trigger` | `pressed := trigger and can_fire and not is_reloading`. Đang nạp thì dừng loạt burst |
+
+Label debug: `ammo 26/30 | 90  RELOAD 1.8s`.
+
+### 25.4 Clip nạp đạn
+1. Mixamo: **Reloading** (cầm rifle) → chuẩn hoá như Bước 6 (bỏ prefix, **không** In Place vì chỉ dùng thân trên) → `assets/characters/animations/humanoid/source/reloading/reloading.blend`.
+2. Godot import: tách clip `clips/rifle_upper/reload.res` (3.33 s, **Loop tắt**).
+3. Tạo AnimationLibrary `assets/characters/animations/humanoid/reload.res`. Gắn vào `Model/AnimationPlayer` của `swat_character.tscn` với tên library **`reload`**. Tên đầy đủ của clip vì thế là **`reload/reload`**.
+
+**Phân tích clip** (khoảng cách lòng bàn tay trái tới băng đạn, theo % thời gian):
+
+| % | Tay trái |
+|---|---|
+| 0–20 | Ở cạnh băng đạn |
+| 22 | Rời súng (rút băng) |
+| 30 | Thấp nhất (lấy băng mới ở túi) |
+| 50 | Về lại khe băng đạn (lắp) |
+| 75+ | Về ốp súng |
+
+### 25.5 AnimationTree: tách StateMachine, thêm lớp thân trên
+Trước đây root của AnimationTree là StateMachine. Giờ root là **BlendTree**:
+```
+StateMachine (locomotion_states.tres) ──────────────► Reload (OneShot) in ──► Output
+ReloadClip ("reload/reload") ─► ReloadSpeed (TimeScale) ─► Reload  shot
+```
+1. `AnimationTree` → **Tree Root** → chuột phải → **Save As** → `scenes/characters/swat/locomotion_states.tres` (giữ StateMachine cũ thành file).
+2. **Tree Root** → **New AnimationNodeBlendTree**. Trong panel AnimationTree:
+   - chuột phải → **Load…** → `locomotion_states.tres` → đổi tên **`StateMachine`**;
+   - **Add Animation** → `reload/reload` → **`ReloadClip`**;
+   - **Add TimeScale** → **`ReloadSpeed`**;
+   - **Add OneShot** → **`Reload`**: Fade In `0.15`, Fade Out `0.25`.
+3. Nối như sơ đồ: `StateMachine` → cổng **in** của `Reload`; `ReloadSpeed` → cổng **shot**; `Reload` → **Output**.
+4. Mọi đường dẫn tham số giờ có thêm tiền tố `StateMachine/`. Trong `humanoid_character.gd`:
+   ```gdscript
+   const BLEND_PATH := &"parameters/StateMachine/Locomotion/blend_position"
+   const PLAYBACK_PATH := &"parameters/StateMachine/playback"
+   const TURN_BLEND_PATH := &"parameters/StateMachine/TurnInPlace/blend_position"
+   const CROUCH_BLEND_PATH := &"parameters/StateMachine/Crouch/blend_position"
+   const CROUCH_TURN_BLEND_PATH := &"parameters/StateMachine/CrouchTurn/blend_position"
+   const RELOAD_REQUEST_PATH := &"parameters/Reload/request"
+   const RELOAD_SPEED_PATH := &"parameters/ReloadSpeed/scale"
+   ```
+
+### 25.6 Code nhân vật (`humanoid_character.gd`)
+| Phần | Làm gì |
+|---|---|
+| Export `reload_animation` | Tên clip để đo độ dài. **Phải là `reload/reload`** (có tên library) |
+| Export `ik_fade_time` | 0.2 s tắt / bật IK tay trái |
+| `_setup_upper_body_filter()` | Bật Filter của OneShot cho **`Spine` và mọi xương con** (47 / 56 xương). Đặt bằng code: đi ngược từ mỗi xương lên cha xem có gặp `Spine` không. Hông và chân vẫn theo StateMachine |
+| `reload()` | `weapon.reload()`, cho controller / AI gọi |
+| `_on_reload_started(duration)` | `ReloadSpeed/scale = clip.length / duration` (3.33 / 2.5 = **1.33**), OneShot **FIRE**, IK tay trái về 0 |
+| `_on_reload_ended()` (finished + cancelled) | OneShot **FADE_OUT**, IK tay trái về 1 |
+| `_fade_left_hand_ik(target)` | Tween thuộc tính `influence` của `LeftHandIKModifier` |
+| `_update_weapon()` | Đang sprint mà đang nạp → `cancel_reload()` |
+
+**Vì sao co giãn clip theo `reload_time`:** thời gian nạp nằm trong `WeaponData` (cân bằng game), còn clip là của Mixamo. Co giãn thì đổi `reload_time` mà animation vẫn khớp. Đổi súng khác cũng dùng lại clip được.
+
+**Vì sao tắt IK tay trái:** IK kéo tay trái về ốp súng ở mọi tư thế. Khi nạp, tay trái phải đi lấy băng theo clip.
+
+### 25.7 Băng đạn: `MagazineHandler` (animation + physics)
+**`scripts/weapons/magazine_handler.gd`** (`@tool`, class `MagazineHandler`), là con của root súng:
+
+| Mốc (export) | Mặc định | Việc |
+|---|---|---|
+| `drop_at` | 0.22 | Ẩn `ScarL/Mag`, tạo **bản sao RigidBody** đúng chỗ đó: layer 4, mask 1, `drop_mass` 0.2 kg, CCD, BoxShape theo `get_aabb()`, rơi 0.8 m/s theo −Y của súng (tuột khỏi khe) + xoay ngẫu nhiên. Tự xoá sau `drop_lifetime` (10 s) |
+| `grab_at` | 0.32 | Hiện băng mới (bản sao hình) ở `MagSocket` trên tay trái |
+| `insert_at` | 0.50 | Ẩn băng trong tay, hiện lại `ScarL/Mag` |
+| `reload_finished` / `reload_cancelled` | | `_restore()`: băng trên súng hiện, băng trong tay ẩn |
+
+Thiết kế:
+- **Không tách node `Mag` thật khỏi súng.** Chỉ ẩn nó rồi tạo bản sao để rơi, nên lắp lại chỉ việc hiện lên.
+- **Mốc tính theo % thời gian nạp**, vì clip được co giãn cho vừa. Không dùng Call Method track trong clip, vì clip là file Mixamo được import: track tự thêm sẽ mất mỗi lần import lại.
+- Băng trong tay **không gán owner**, nên tạo trong editor (preview) cũng không bị lưu vào scene.
+- Tìm `MagSocket`: lúc chơi qua `weapon.owner_body` (nhân vật); trong editor thì đi ngược lên Skeleton3D. Súng không cần biết nhân vật là ai.
+
+**Thao tác:**
+1. `scar_l.tscn`: chuột phải root `scar_l` → Add Child Node → `Node` → **`MagazineHandler`** → gắn script → **Magazine** = `ScarL/Mag`.
+2. `swat_character.tscn`:
+   - chuột phải `Model/Skeleton_Reference/GeneralSkeleton` → `BoneAttachment3D` **`LeftHandAttachment`**, Bone Name **`LeftHand`**;
+   - thêm con `Node3D` **`MagSocket`** (đúng tên này).
+   - Gợi ý ban đầu: Position `(-0.016, 0.09, 0.067)`, Rotation `(39.3, 66.7, 90.2)`. Đó là góc băng đạn trên súng tại mốc 50%, đặt ở lòng bàn tay.
+3. **Chỉnh băng trong tay ngay trong editor:**
+   1. `LeftHandIKModifier` → Influence `0`; `AnimationTree` bỏ tick Active.
+   2. `Model/AnimationPlayer` → clip `reload/reload` → kéo timeline tới khoảng 1.1 s (32%).
+   3. `MagazineHandler` → tick **Preview In Hand** → dời / xoay `MagSocket` cho băng nằm gọn trong lòng bàn tay. Kéo tới 1.65 s (50%) xem băng có hướng vào khe không.
+   4. **Trả lại trước khi lưu:** bỏ tick Preview In Hand, Influence `1`, tick Active, **Ctrl+S**.
+
+### 25.8 Thông số để chỉnh
+| Thấy gì | Chỉnh |
+|---|---|
+| Clip bị cắt ngang ở 75%, tốc độ vẫn 1.0 | `SwatCharacter` → `reload_animation` phải đúng tên có library (`reload/reload`) |
+| Nạp nhanh / chậm hơn | `WeaponData.reload_time` (clip tự co giãn theo) |
+| Băng rơi khi tay chưa rời súng / rời lâu rồi | `drop_at` tăng / giảm |
+| Băng mới hiện khi tay chưa xuống tới túi | `grab_at` tăng |
+| Băng "nhảy" vào súng khi tay còn xa | `insert_at` tăng, hoặc dời `MagSocket` |
+| Tay trái giật khi bắt đầu / kết thúc nạp | `ik_fade_time`, Fade In / Fade Out của OneShot |
+
+### 25.9 Kiểm tra (F6 `test_player.tscn`)
+| Thao tác | Mong đợi |
+|---|---|
+| Bắn vài phát → R | Label `RELOAD 2.4s…`. Khoảng 0.55 s: băng cũ tuột xuống sàn. Khoảng 0.8 s: băng mới trong tay trái. Khoảng 1.25 s: lắp vào. 2.5 s: `ammo 30/30 | 86`, tay trái về ốp súng |
+| Đi / ngồi / xoay trong lúc nạp | Chân vẫn bước, chỉ thân trên nạp |
+| Shift chạy giữa chừng | Huỷ nạp, băng trên súng hiện lại, đạn không đổi |
+| Bắn hết 30 viên, bóp cò tiếp | Tự nạp (`auto_reload`) |
+| R khi băng đầy hoặc hết dự trữ | Không có gì xảy ra |
+
+**Đã biết:** clip Mixamo làm cho súng khác, nên lúc lắp, tay trái cách khe băng SCAR khoảng 15–20 cm. Băng "nhảy" một đoạn ngắn. Camera cao nên khó thấy. Muốn khít thì cần IK kéo tay trái tới khe băng đạn trong đoạn lắp.
+
+---
 
 ## Git và LFS
 
@@ -1840,6 +2174,15 @@ Blender tạo file `.blend1` mỗi lần lưu đè. Quy tắc LFS `*.blend` khô
 | Tên ảnh trong Blender thành `…<UDIM>.exr` | Blender hiểu đuôi 1001 là số ô UDIM | Bỏ tick UDIM Tiles trong hộp thoại Open (23.3) |
 | Màu lửa / khói xuất ra bị lệch | Color Space của node Image là Linear Rec.709 | Đặt **ACEScg** (chọn lại mỗi lần mở file) |
 | Render Animation tạo thêm thư mục con `smoke_side_` | Output path kết thúc bằng `\` | Bỏ dấu `\` ở cuối, hoặc dùng tiền tố tên file (23.3) |
+| Vỏ đạn kẹt lơ lửng ở cửa nhả vỏ, đi theo súng mãi | Clip lưu trong library có tên → tên thật là `weapons/eject`; hoặc clip đang Loop | `eject_animation` = `weapons/eject`, Loop tắt (24.5) |
+| Khoá nòng đứng im, vỏ vẫn văng | `Fire Animation` thiếu tên library | `weapons_fire/fire` (24.6) |
+| Root vỏ đạn tự nhảy khỏi (0, 0, 0) mỗi lần lưu | Clip RESET ghi vị trí sai + Reset On Save | Xoá clip RESET, đưa root về 0, tắt Reset On Save (24.5) |
+| Vỏ đạn lún vào sàn, rung mãi | Godot Physics không giữ được vật cỡ 1 cm | Physics Engine = Jolt (24.8) |
+| Vỏ để lại vệt kéo lúc rời súng | Đổi cha mà không reset nội suy | `reset_physics_interpolation()` sau `reparent` (24.7) |
+| Bấm R: thân trên nạp nhưng bị cắt ở 75% | `reload_animation` sai tên → tốc độ 1.0 | `reload/reload` (25.6) |
+| Đổi sang BlendTree xong nhân vật đứng đơ | Đường dẫn tham số thiếu `StateMachine/` | Cập nhật 5 hằng số (25.5) |
+| Nạp đạn mà chân cũng diễn clip nạp | Filter của OneShot chưa bật | Kiểm tra cảnh báo `chưa có OneShot 'Reload'` ở Output (25.6) |
+| Không thấy băng trong tay trái | Không có node tên đúng `MagSocket` dưới xương LeftHand | 25.7. Output có cảnh báo `không tìm thấy 'MagSocket'` |
 
 ---
 
@@ -1851,7 +2194,7 @@ Blender tạo file `.blend1` mỗi lần lưu đè. Quy tắc LFS `*.blend` khô
 | 1 | Pipeline animation: idle, walk 8 hướng, sprint 8 hướng, turn trái/phải, In Place + đưa về tâm, 1 BoneMap, library `locomotion`, script Blender (batch import) | ✅ |
 | 2 | Scene nhân vật: `swat_character.tscn`, AnimationTree (BlendSpace2D), `humanoid_character.gd`, scene test | ✅ |
 | 3 | Điều khiển người chơi: ngắm theo chuột, camera đi theo, WASD theo camera, xoay thân trên (`SpineTwistModifier`), xoay tại chỗ theo Spine (Turn 90/180, BlendSpace1D `TurnInPlace`, curve góc Spine), sprint 8 hướng (Shift), camera mượt (Physics Interpolation), ngồi (C: idle, đi 8 hướng, xoay 90/180, library `crouch`), nghiêng người (Q / E, `LeanModifier`) | ✅ |
-| 4 | Vũ khí: model SCAR-L chuẩn hoá ✅, gắn vào tay (`BoneAttachment3D`) ✅, IK tay trái + ngón tay nắm súng (`LeftHandIKModifier`, xem trước trong editor) ✅, `WeaponData` + bắn hitscan (D1–D2) ✅, lửa đầu nòng + khói từ VFX EXR (D4.2) ✅, signal normal / dry fire (D4.1), vệt đạn, tia lửa chỗ trúng, âm thanh, rung camera, tâm ngắm (D4.3–D4.7), mục tiêu + sát thương (D3), tư thế giương súng (D5), toả đạn / giật (D6), nạp đạn (D7) | 🔄 Đang làm |
+| 4 | Vũ khí: model SCAR-L chuẩn hoá ✅, gắn vào tay (`BoneAttachment3D`) ✅, IK tay trái + ngón tay nắm súng (`LeftHandIKModifier`, xem trước trong editor) ✅, `WeaponData` + bắn hitscan (D1–D2) ✅, lửa đầu nòng + khói từ VFX EXR (D4.2) ✅, vỏ đạn văng ra animation + physics, khoá nòng giật ✅, nạp đạn: logic, OneShot thân trên, băng rơi / băng trong tay (R1–R5) ✅, nạp khi rỗng + kéo khoá nòng (R6), HUD đạn (R7), signal normal (D4.1), vệt đạn, tia lửa chỗ trúng, âm thanh, rung camera, tâm ngắm (D4.3–D4.7), mục tiêu + sát thương (D3), tư thế giương súng (D5), toả đạn / giật (D6) | 🔄 Đang làm |
 | 5 | Chiến đấu: máu, hitbox/hurtbox, animation thân trên (bắn, nạp đạn, trúng đạn, chết) | ⬜ |
 | 6 | Kẻ địch: Navigation, AI (dùng lại `HumanoidCharacter`, chỉ thay controller) | ⬜ |
 | 7 | Vòng lặp game: wave, HUD, menu | ⬜ |
